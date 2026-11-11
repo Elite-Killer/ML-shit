@@ -213,8 +213,12 @@ def build_report() -> str:
              "trained here on train-split sources only.\n")
 
     L.append("## Classification results\n")
-    have_c = any((artifact_dir("checkpoints", "vit", f"C_seed{s}") / "best.pt").exists()
-                 for s in (42, 123, 2026))
+    # The .pt weights stay on the volume; the result JSON is the local evidence
+    # that a run completed.
+    have_c = any(
+        (artifact_dir("checkpoints", "vit", f"C_seed{s}") / "train_result.json").exists()
+        for s in (42, 123, 2026)
+    )
     if have_c:
         L.append("**Arm C was run as a budget-forced ablation: 1,000 sampling steps "
                  "instead of the reference 2,000.** The account balance could not "

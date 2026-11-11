@@ -41,7 +41,7 @@ The released weights are used for the smoke test only, because the authors do no
 
 ## Classification results
 
-**Arm C classification is not reported: no Arm C checkpoint was trained.** Arm C image processing stopped at 6,464 of 8,993 hair-present images when the Modal account ran out of credits, so the C arm could not be trained or evaluated. The A-B and A-A* comparisons below are complete; every A-C and B-C comparison is missing rather than null. This is an incomplete experiment, not a negative result for Arm C.
+**Arm C was run as a budget-forced ablation: 1,000 sampling steps instead of the reference 2,000.** The account balance could not cover the full-step run, so Arm C is half the reference sampling budget. Its results are reported as an ablation and must not be read as DM-AHR at the paper's settings. See decision log D12.
 
 ### Mean ± SD over seeds
 

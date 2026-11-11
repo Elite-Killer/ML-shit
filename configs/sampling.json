@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "psnr_data_range": 1.0,
+  "ssim_data_range": 1.0,
+  "ssim_win_size": 7,
+  "xai_top_fraction": 0.2,
+  "xai_pointing_tolerance_px": 0,
+  "chance_baselines": ["uniform", "centered_gaussian"]
+}
+

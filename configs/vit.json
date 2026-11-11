@@ -1,0 +1,29 @@
+{
+  "version": "1.0.0",
+  "model": "vit_b_16",
+  "weights": "IMAGENET1K_V1",
+  "image_size": 224,
+  "batch_size": 32,
+  "grad_accum_steps": 1,
+  "epochs": 100,
+  "lr": 3e-05,
+  "weight_decay": 0.05,
+  "warmup_epochs": 5,
+  "scheduler": "cosine",
+  "label_smoothing": 0.0,
+  "class_weights": "train_inverse_frequency",
+  "early_stopping_patience": 10,
+  "early_stopping_metric": "val_macro_f1",
+  "grad_clip": 1.0,
+  "precision": "bf16",
+  "num_workers": 8,
+  "augmentation": {
+    "random_resized_crop_scale": [0.75, 1.0],
+    "random_resized_crop_ratio": [0.9, 1.1111111111111112],
+    "horizontal_flip": 0.5,
+    "vertical_flip": 0.5,
+    "rotation_degrees": 15,
+    "color_jitter": [0.15, 0.15, 0.1, 0.02]
+  }
+}
+

@@ -1,0 +1,33 @@
+{
+  "version": "1.0.0",
+  "upstream_repo": "https://github.com/AnasHXH/DM-AHR",
+  "upstream_commit": "PINNED_AT_AUDIT",
+  "native_resolution": 128,
+  "condition_resolution": 128,
+  "num_timesteps": 2000,
+  "beta_schedule": {"schedule": "linear", "linear_start": 1e-06, "linear_end": 0.01},
+  "unet": {
+    "in_channel": 6,
+    "out_channel": 3,
+    "inner_channel": 64,
+    "channel_multiplier": [1, 2, 4, 8, 8],
+    "attn_res": [16],
+    "res_blocks": 2,
+    "dropout": 0.2
+  },
+  "train": {
+    "iterations": 20000,
+    "batch_size": 4,
+    "lr": 0.0001,
+    "optimizer": "adam",
+    "checkpoint_every": 1000,
+    "val_every": 1000,
+    "overfit_pairs": 12
+  },
+  "sampling": {
+    "batch_size": 4,
+    "num_timesteps": 2000,
+    "reduced_steps_ablation": null
+  }
+}
+

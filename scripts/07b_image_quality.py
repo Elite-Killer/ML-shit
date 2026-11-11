@@ -1,0 +1,114 @@
+"""Paired PSNR/SSIM against held-out hairless references.
+
+Scores the hairy input against its reference (the degradation to be removed),
+plus Arm B and Arm C outputs on the same hairy inputs. Only synthetic pairs,
+where a genuine hairless reference exists, are used.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from PIL import Image
+from skimage.metrics import peak_signal_noise_ratio, structural_similarity
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from dm_ahr_vit.config import load_config, save_json  # noqa: E402
+from dm_ahr_vit.hair.dullrazor import apply_dullrazor  # noqa: E402
+from dm_ahr_vit.hair.screening import detect_hair  # noqa: E402
+from dm_ahr_vit.paths import artifact_dir, data_root, manifest_dir, processed_dir  # noqa: E402
+from dm_ahr_vit.utils import record_run, setup_logging, timed  # noqa: E402
+from dm_ahr_vit.config import load_frozen  # noqa: E402
+
+log = setup_logging()
+
+
+def score(pred: np.ndarray, ref: np.ndarray, size: int = 128, cfg: dict | None = None) -> dict:
+    cfg = cfg or {}
+    a = np.asarray(Image.fromarray(pred).convert("RGB").resize((size, size),
+                                                               Image.Resampling.BICUBIC),
+                   dtype=np.float64) / 255.0
+    b = np.asarray(Image.fromarray(ref).convert("RGB").resize((size, size),
+                                                              Image.Resampling.BICUBIC),
+                   dtype=np.float64) / 255.0
+    psnr = peak_signal_noise_ratio(b, a, data_range=1.0)
+    ssim = structural_similarity(b, a, data_range=1.0, channel_axis=2,
+                                 win_size=int(cfg.get("ssim_win_size", 7)))
+    return {"psnr": float(psnr), "ssim": float(ssim)}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--split", default="test", choices=["train", "val", "test"])
+    ap.add_argument("--limit", type=int, default=None)
+    args = ap.parse_args()
+
+    sampling_cfg = load_config("configs/sampling.json")
+    screen_cfg = load_frozen("hair_screen", "configs/hair_screen.json")
+    dull_cfg = load_frozen("dullrazor", "configs/dullrazor.json")
+    pairs = pd.read_csv(manifest_dir() / "synthetic_pairs.csv")
+    pairs = pairs[pairs["split"] == args.split]
+    if args.limit:
+        pairs = pairs.head(args.limit)
+    c_dir = processed_dir("synth") / args.split / "cleaned_C"
+
+    rows = []
+    with timed("image_quality", log) as t:
+        for r in pairs.itertuples(index=False):
+            ref = np.array(Image.open(r.reference_path).convert("RGB"))
+            hairy = np.array(Image.open(r.hairy_path).convert("RGB"))
+            mask, _ = detect_hair(hairy, screen_cfg)
+            b_out = apply_dullrazor(hairy, mask, dull_cfg)
+            row = {
+                "pair_id": r.pair_id,
+                "image_id": r.image_id,
+                "split": r.split,
+                "dx": r.dx,
+                "group_id": r.group_id,
+                "source": r.source,
+            }
+            for arm, arr in (("hairy_input", hairy), ("B", b_out)):
+                m = score(arr, ref, cfg=sampling_cfg)
+                row[f"{arm}_psnr"], row[f"{arm}_ssim"] = m["psnr"], m["ssim"]
+            c_path = c_dir / f"{r.image_id}.png"
+            if c_path.exists():
+                c_out = np.array(Image.open(c_path).convert("RGB"))
+                m = score(c_out, ref, cfg=sampling_cfg)
+                row["C_psnr"], row["C_ssim"] = m["psnr"], m["ssim"]
+                row["C_status"] = "ok"
+            else:
+                row["C_psnr"] = row["C_ssim"] = float("nan")
+                row["C_status"] = "missing"
+            rows.append(row)
+
+        df = pd.DataFrame(rows)
+        out = artifact_dir("logs") / f"paired_psnr_ssim_{args.split}.csv"
+        df.to_csv(out, index=False)
+
+    summary = {
+        "split": args.split,
+        "pairs": int(len(df)),
+        "C_scored": int((df["C_status"] == "ok").sum()),
+        "means": {
+            col: float(df[col].mean()) for col in
+            ("hairy_input_psnr", "B_psnr", "C_psnr",
+             "hairy_input_ssim", "B_ssim", "C_ssim")
+            if col in df and df[col].notna().any()
+        },
+        "seconds": t["seconds"],
+    }
+    save_json(summary, artifact_dir("logs") / f"image_quality_{args.split}.json")
+    record_run("image_quality", gpu=None, seconds=t["seconds"], split=args.split,
+               pairs=len(df))
+    print(summary)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+

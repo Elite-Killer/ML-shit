@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "orientations": 12,
+  "kernel_length": 17,
+  "blackhat_threshold": 18,
+  "tophat_threshold": 22,
+  "min_component_area": 40,
+  "dilate_kernel": 5,
+  "dilate_iterations": 2,
+  "coverage_threshold": 0.012,
+  "light_hair": true,
+  "frozen": false
+}
+

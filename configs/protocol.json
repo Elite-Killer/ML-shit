@@ -1,0 +1,27 @@
+{
+  "study": "DM-AHR-ViT",
+  "version": "1.0.0",
+  "max_spend_usd": 250.0,
+  "seeds": [42, 123, 2026],
+  "split_seed": 42,
+  "split_fractions": {"train": 0.70, "val": 0.15, "test": 0.15},
+  "classes": ["akiec", "bcc", "bkl", "df", "mel", "nv", "vasc"],
+  "image_size": 224,
+  "isic_collection_id": 212,
+  "expected_c0_total": 10015,
+  "expected_collection_total": 11720,
+  "near_duplicate_hamming": 6,
+  "arms": ["A", "B", "C", "Astar"],
+  "primary_endpoints": [
+    "test_macro_f1",
+    "paired_psnr",
+    "paired_ssim",
+    "x1_gradcam_overlap20",
+    "x1_rollout_overlap20"
+  ],
+  "planned_comparisons": [["A", "B"], ["A", "C"], ["B", "C"]],
+  "bootstrap_replicates": 10000,
+  "bootstrap_seed": 20260101,
+  "research_only_statement": "Research prototype only. Not clinically validated and not intended for diagnosis or patient care."
+}
+

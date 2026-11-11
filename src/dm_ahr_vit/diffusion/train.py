@@ -1,0 +1,189 @@
+"""Leakage-controlled DM-AHR training on train-split paired sources only."""
+
+from __future__ import annotations
+
+import json
+import time
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import torch
+from PIL import Image
+from torch.utils.data import DataLoader, Dataset
+
+from ..config import save_json
+from ..utils import setup_logging
+from .dmahr_adapter import _ensure_path, build_opt, opt_hash
+
+log = setup_logging()
+
+
+class PairedDataset(Dataset):
+    """(hairy, hairless) pairs at native resolution, in [-1, 1]."""
+
+    def __init__(self, pairs: pd.DataFrame, size: int = 128):
+        self.pairs = pairs.reset_index(drop=True)
+        self.size = size
+
+    def __len__(self) -> int:
+        return len(self.pairs)
+
+    def __getitem__(self, idx: int):
+        r = self.pairs.iloc[idx]
+        hr = np.asarray(
+            Image.open(r["reference_path"]).convert("RGB").resize(
+                (self.size, self.size), Image.Resampling.BICUBIC
+            ),
+            dtype=np.float32,
+        )
+        cond = np.asarray(
+            Image.open(r["hairy_path"]).convert("RGB").resize(
+                (self.size, self.size), Image.Resampling.BICUBIC
+            ),
+            dtype=np.float32,
+        )
+        if idx % 2 == 1:
+            hr, cond = hr[:, ::-1].copy(), cond[:, ::-1].copy()
+        return {
+            "HR": torch.from_numpy(hr / 127.5 - 1.0).permute(2, 0, 1),
+            "SR": torch.from_numpy(cond / 127.5 - 1.0).permute(2, 0, 1),
+        }
+
+
+def _infinite(loader):
+    while True:
+        for batch in loader:
+            yield batch
+
+
+@torch.no_grad()
+def val_loss(net, loader, device: str, timesteps=(200, 800, 1400, 1900)) -> float:
+    net.eval()
+    losses = []
+    for batch in loader:
+        hr = batch["HR"].to(device)
+        cond = batch["SR"].to(device)
+        for t in timesteps:
+            t_arr = torch.full((hr.shape[0],), float(t) / net.num_timesteps, device=device)
+            alpha = net.sqrt_alphas_cumprod_prev[int(t) - 1]
+            noise = torch.randn_like(hr)
+            noisy = alpha * hr + (1 - alpha**2) ** 0.5 * noise
+            pred = net.denoise_fn(torch.cat([cond, noisy], dim=1), t_arr)
+            losses.append(float((pred - noise).abs().mean()))
+    net.train()
+    return float(np.mean(losses))
+
+
+def train(
+    cfg: dict,
+    pairs: pd.DataFrame,
+    val_pairs: pd.DataFrame,
+    out_dir: Path,
+    device: str = "cuda",
+    overfit: bool = False,
+) -> dict:
+    _ensure_path()
+    import model.networks as networks  # noqa: PLC0415
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    opt = build_opt(cfg)
+    net = networks.define_G(opt).to(device)
+    # Upstream's define_G/__init__ never registers the diffusion buffers, so the
+    # noise schedule must be set explicitly before any q_sample/p_losses use.
+    net.set_new_noise_schedule(
+        {"schedule": cfg["beta_schedule"]["schedule"],
+         "linear_start": cfg["beta_schedule"]["linear_start"],
+         "linear_end": cfg["beta_schedule"]["linear_end"],
+         "n_timestep": int(cfg["num_timesteps"])},
+        device=torch.device(device),
+    )
+    opt_g = torch.optim.Adam(net.parameters(), lr=float(cfg["train"]["lr"]))
+    iterations = int(cfg["train"]["iterations"])
+    if overfit:
+        pairs = pairs.head(int(cfg["train"].get("overfit_pairs", 12)))
+        iterations = 500
+    train_ds = PairedDataset(pairs, int(cfg["native_resolution"]))
+    val_ds = PairedDataset(val_pairs, int(cfg["native_resolution"]))
+    bs = int(cfg["train"]["batch_size"])
+    train_loader = DataLoader(train_ds, batch_size=bs, shuffle=True, drop_last=True,
+                              num_workers=4, pin_memory=True)
+    val_loader = DataLoader(val_ds, batch_size=bs, shuffle=False, num_workers=2)
+
+    state_path = out_dir / ("overfit_state.pt" if overfit else "train_state.pt")
+    start = 0
+    best = float("inf")
+    history = []
+    if state_path.exists():
+        state = torch.load(state_path, map_location="cpu", weights_only=False)
+        net.load_state_dict(state["model"])
+        opt_g.load_state_dict(state["optimizer"])
+        start = int(state["iteration"])
+        best = float(state.get("best_val", best))
+        history = state.get("history", [])
+        log.info("resumed DM-AHR at iteration %d", start)
+
+    save_json(
+        {
+            "config": cfg,
+            "opt_hash": opt_hash(opt),
+            "train_pairs": int(len(train_ds)),
+            "val_pairs": int(len(val_ds)),
+            "train_pair_ids": train_ds.pairs["pair_id"].tolist(),
+            "val_pair_ids": val_ds.pairs["pair_id"].tolist(),
+            "train_sources_splits": sorted(train_ds.pairs["split"].unique().tolist()),
+            "val_sources_splits": sorted(val_ds.pairs["split"].unique().tolist()),
+            "leakage_check": bool(
+                not set(train_ds.pairs["group_id"]) & set(val_ds.pairs["group_id"])
+            ),
+            "overfit": overfit,
+        },
+        out_dir / "training_manifest.json",
+    )
+
+    net.train()
+    it = _infinite(train_loader)
+    ckpt_every = int(cfg["train"]["checkpoint_every"])
+    val_every = int(cfg["train"]["val_every"])
+    t0 = time.time()
+    for step in range(start + 1, iterations + 1):
+        batch = next(it)
+        hr = batch["HR"].to(device, non_blocking=True)
+        cond = batch["SR"].to(device, non_blocking=True)
+        t = np.random.randint(1, net.num_timesteps + 1)
+        alpha = net.sqrt_alphas_cumprod_prev[t - 1]
+        t_arr = torch.full((hr.shape[0],), float(t) / net.num_timesteps, device=device)
+        noise = torch.randn_like(hr)
+        x_noisy = alpha * hr + (1 - alpha**2) ** 0.5 * noise
+        pred = net.denoise_fn(torch.cat([cond, x_noisy], dim=1), t_arr)
+        loss = (pred - noise).abs().mean()
+        opt_g.zero_grad(set_to_none=True)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
+        opt_g.step()
+
+        if step % 100 == 0:
+            log.info("dmahr iter %d/%d loss %.5f (%.0fs)", step, iterations,
+                     float(loss), time.time() - t0)
+        if step % val_every == 0 or step == iterations:
+            v = val_loss(net, val_loader, device)
+            history.append({"iteration": step, "train_l1": float(loss), "val_l1": v})
+            log.info("dmahr val iter %d: %.5f", step, v)
+            if v < best:
+                best = v
+                torch.save(net.state_dict(), out_dir / "best_gen.pth")
+        if step % ckpt_every == 0 or step == iterations:
+            tmp = state_path.with_suffix(".tmp")
+            torch.save(
+                {"iteration": step, "model": net.state_dict(),
+                 "optimizer": opt_g.state_dict(), "best_val": best,
+                 "history": history},
+                tmp,
+            )
+            tmp.replace(state_path)
+
+    torch.save(net.state_dict(), out_dir / "final_gen.pth")
+    save_json({"history": history, "best_val": best, "iterations": iterations,
+               "seconds": round(time.time() - t0, 1)}, out_dir / "train_log.json")
+    return {"iterations": iterations, "best_val": best, "seconds": time.time() - t0}
+

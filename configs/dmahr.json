@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "upstream_repo": "https://github.com/AnasHXH/DM-AHR",
-  "upstream_commit": "PINNED_AT_AUDIT",
+  "upstream_commit": "0aee1bbabf788a59be5e1eecddc20f533b5006d8",
   "native_resolution": 128,
   "condition_resolution": 128,
   "num_timesteps": 2000,
@@ -25,7 +25,7 @@
     "overfit_pairs": 12
   },
   "sampling": {
-    "batch_size": 4,
+    "batch_size": 32,
     "num_timesteps": 2000,
     "reduced_steps_ablation": null
   }

@@ -28,6 +28,21 @@ from dm_ahr_vit.config import load_frozen  # noqa: E402
 log = setup_logging()
 
 
+def resolve(path: str) -> Path:
+    """Map a recorded Modal-volume path onto the local data root.
+
+    Manifests are written inside the container, so they hold `/__modal/...`
+    paths. Re-rooting on the `/data/` segment keeps them usable off-Modal.
+    """
+    p = Path(path)
+    if p.exists():
+        return p
+    marker = "/data/"
+    if marker in str(p):
+        return data_root() / str(p).split(marker, 1)[1]
+    return p
+
+
 def score(pred: np.ndarray, ref: np.ndarray, size: int = 128, cfg: dict | None = None) -> dict:
     cfg = cfg or {}
     a = np.asarray(Image.fromarray(pred).convert("RGB").resize((size, size),
@@ -60,8 +75,8 @@ def main() -> int:
     rows = []
     with timed("image_quality", log) as t:
         for r in pairs.itertuples(index=False):
-            ref = np.array(Image.open(r.reference_path).convert("RGB"))
-            hairy = np.array(Image.open(r.hairy_path).convert("RGB"))
+            ref = np.array(Image.open(resolve(r.reference_path)).convert("RGB"))
+            hairy = np.array(Image.open(resolve(r.hairy_path)).convert("RGB"))
             mask, _ = detect_hair(hairy, screen_cfg)
             b_out = apply_dullrazor(hairy, mask, dull_cfg)
             row = {

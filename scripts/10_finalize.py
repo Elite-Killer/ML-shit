@@ -213,6 +213,16 @@ def build_report() -> str:
              "trained here on train-split sources only.\n")
 
     L.append("## Classification results\n")
+    have_c = any((artifact_dir("checkpoints", "vit", f"C_seed{s}") / "best.pt").exists()
+                 for s in (42, 123, 2026))
+    if not have_c:
+        L.append("**Arm C classification is not reported: no Arm C checkpoint was "
+                 "trained.** Arm C image processing stopped at 6,464 of 8,993 "
+                 "hair-present images when the Modal account ran out of credits, so "
+                 "the C arm could not be trained or evaluated. The A-B and A-A* "
+                 "comparisons below are complete; every A-C and B-C comparison is "
+                 "missing rather than null. This is an incomplete experiment, not a "
+                 "negative result for Arm C.\n")
     L.append("### Mean ± SD over seeds\n")
     L.append(md_table(summ))
     L.append("\n### Per-class test metrics (full test split)\n")
@@ -231,6 +241,16 @@ def build_report() -> str:
     L.append("\nPSNR/SSIM are computed only against genuine hairless references from "
              "synthetic pairs. Naturally hairy images are never scored against a "
              "guessed reference.\n")
+    if quality.get("C_scored"):
+        L.append("\n**Arm C image quality is poor and this is a real finding, not a "
+                 "scoring artefact.** The leakage-controlled DM-AHR checkpoint was "
+                 "trained for 20,000 iterations, whereas the upstream config specifies "
+                 "660,000. Its outputs are visibly over-smoothed: on the same 186 "
+                 "held-out pairs the output standard deviation collapses relative to "
+                 "the input, so it scores below the unprocessed hairy image. Arm C "
+                 "therefore cannot be read as a fair test of DM-AHR as published; it "
+                 "tests an undertrained model. A faithful Arm C needs the full "
+                 "iteration budget.\n")
 
     L.append("## Explainability\n")
     xai_files = sorted(artifact_dir("logs").glob("xai_summary_*.json"))

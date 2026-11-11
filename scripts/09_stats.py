@@ -71,18 +71,35 @@ def draw_counts(n_groups: int, reps: int, seed: int) -> np.ndarray:
     return counts
 
 
-def compare(dist_a: np.ndarray, dist_b: np.ndarray, alpha: float = 0.05) -> dict:
+def compare(dist_a: np.ndarray, dist_b: np.ndarray, alpha: float = 0.05,
+            paired_diffs: np.ndarray | None = None) -> dict:
+    """Bootstrap CI/p for a difference; Cohen's dz from observed pairs.
+
+    dz is computed on the observed paired differences, not on the bootstrap
+    distribution, whose spread shrinks with replicate count and would inflate
+    the effect size without bound.
+    """
     diff = dist_a - dist_b
+    diff = diff[np.isfinite(diff)]
+    if diff.size == 0:
+        return {"difference": float("nan"), "ci_low": float("nan"),
+                "ci_high": float("nan"), "p_raw": float("nan"),
+                "effect_size_dz": float("nan")}
     lo, hi = np.percentile(diff, [100 * alpha / 2, 100 * (1 - alpha / 2)])
     p = 2 * min(float((diff <= 0).mean()), float((diff >= 0).mean()))
-    sd = float(np.std(diff, ddof=1)) if len(diff) > 1 else float("nan")
-    mean_diff = float(dist_a.mean() - dist_b.mean())
+    mean_diff = float(np.nanmean(dist_a) - np.nanmean(dist_b))
+    dz = float("nan")
+    if paired_diffs is not None:
+        d = np.asarray(paired_diffs, dtype=float)
+        d = d[np.isfinite(d)]
+        if d.size > 1 and d.std(ddof=1) > 0:
+            dz = float(d.mean() / d.std(ddof=1))
     return {
         "difference": mean_diff,
         "ci_low": float(lo),
         "ci_high": float(hi),
         "p_raw": float(min(1.0, p)),
-        "effect_size_dz": float(mean_diff / sd) if sd > 0 else float("nan"),
+        "effect_size_dz": dz,
     }
 
 
@@ -115,6 +132,7 @@ def classification_endpoint(seeds: list[int], subset: str, reps: int, bseed: int
     W = draw_counts(len(groups), reps, bseed)
 
     dists, observed = {}, {}
+    per_group_f1: dict[str, np.ndarray] = {}
     for arm in available:
         per_seed, seed_scores = [], []
         for seed in seeds:
@@ -131,11 +149,19 @@ def classification_endpoint(seeds: list[int], subset: str, reps: int, bseed: int
             continue
         dists[arm] = bootstrap_arm_scores(per_seed, W)
         observed[arm] = float(np.mean(seed_scores))
+        # Per-group macro-F1, averaged over seeds, for the observed effect size.
+        per_group_f1[arm] = np.mean(
+            [macro_f1_from_counts(c["tp"], c["fp"], c["fn"]) for c in per_seed],
+            axis=0,
+        )
 
     rows = []
     for a, b in comparisons:
         if a not in dists or b not in dists:
             continue
+        diffs = None
+        if a in per_group_f1 and b in per_group_f1:
+            diffs = per_group_f1[a] - per_group_f1[b]
         rows.append({
             "endpoint": "test_macro_f1",
             "subset": subset,
@@ -147,7 +173,7 @@ def classification_endpoint(seeds: list[int], subset: str, reps: int, bseed: int
             "n_images": len(common),
             "n_groups": len(groups),
             "replicates": reps,
-            **compare(dists[a], dists[b]),
+            **compare(dists[a], dists[b], paired_diffs=diffs),
             "wilcoxon_p_raw": float("nan"),
             "test": "lesion-group paired bootstrap, percentile CI, two-sided",
         })
@@ -173,9 +199,21 @@ def bootstrap_group_means(df: pd.DataFrame, value: str, arm_col: str,
         cnts = np.zeros(len(groups))
         np.add.at(sums, gi, vals)
         np.add.at(cnts, gi, 1.0)
-        dists[arm] = (W @ sums) / np.maximum(W @ cnts, 1e-9)
+        dists[arm] = _safe_ratio(W @ sums, W @ cnts)
         obs[arm] = float(vals.mean())
     return {"dists": dists, "obs": obs}
+
+
+def _safe_ratio(num: np.ndarray, den: np.ndarray) -> np.ndarray:
+    """Mean per bootstrap replicate, ignoring replicates that drew no members.
+
+    A group-level resample can miss a group entirely; dividing by a clamped
+    epsilon there would fabricate astronomically large values.
+    """
+    out = np.full(num.shape, np.nan, dtype=float)
+    ok = den > 0
+    out[ok] = num[ok] / den[ok]
+    return out
 
 
 def paired_column_endpoint(df: pd.DataFrame, col_a: str, col_b: str, endpoint: str,
@@ -217,15 +255,17 @@ def paired_column_endpoint(df: pd.DataFrame, col_a: str, col_b: str, endpoint: s
     np.add.at(sa, gi, a)
     np.add.at(sb, gi, b)
     np.add.at(ca, gi, 1.0)
-    da = (W @ sa) / np.maximum(W @ ca, 1e-9)
-    db = (W @ sb) / np.maximum(W @ cb, 1e-9)
+    np.add.at(cb, gi, 1.0)
+    da = _safe_ratio(W @ sa, W @ ca)
+    db = _safe_ratio(W @ sb, W @ cb)
+    observed_diffs = a - b
     for x, y in comparisons:
         rows.append({
             "endpoint": endpoint, "subset": "held_out_pairs",
             "comparison": f"{x}-{y}", "arm_a": x, "arm_b": y,
             "arm_a_mean": float(a.mean()), "arm_b_mean": float(b.mean()),
             "n_images": int(len(df)), "n_groups": len(groups),
-            "replicates": reps, **compare(da, db),
+            "replicates": reps, **compare(da, db, paired_diffs=observed_diffs),
             "wilcoxon_p_raw": float("nan"),
             "test": "lesion-group paired bootstrap, percentile CI, two-sided",
         })
@@ -276,6 +316,12 @@ def main() -> int:
         for subset in ("full", "hair_present"):
             out += classification_endpoint(seeds, subset, reps, bseed, comparisons)
 
+        # Secondary control: A vs A* isolates the 128px resolution change that
+        # Arm C introduces. Reported separately from the planned family.
+        for subset in ("full", "hair_present"):
+            out += classification_endpoint(
+                seeds, subset, reps, bseed, [("A", "Astar")])
+
         p = artifact_dir("logs") / "paired_psnr_ssim_test.csv"
         if p.exists():
             df = pd.read_csv(p)
@@ -298,10 +344,15 @@ def main() -> int:
         log.error("no statistical comparisons could be computed")
         return 1
     table = pd.DataFrame(out)
+    # A-A* is a secondary resolution control, not one of the three planned
+    # comparisons, so it gets its own Holm family and cannot inflate the
+    # planned family's correction.
+    table["family"] = np.where(
+        table["comparison"].str.contains("Astar"), "secondary_control", "planned")
     table["p_holm"] = np.nan
-    for _, grp in table.groupby(["endpoint", "subset"]):
+    for _, grp in table.groupby(["endpoint", "subset", "family"]):
         table.loc[grp.index, "p_holm"] = holm(grp["p_raw"].tolist())
-    cols = ["endpoint", "subset", "comparison", "arm_a", "arm_b", "arm_a_mean",
+    cols = ["endpoint", "subset", "family", "comparison", "arm_a", "arm_b", "arm_a_mean",
             "arm_b_mean", "difference", "ci_low", "ci_high", "p_raw", "p_holm",
             "effect_size_dz", "n_images", "n_groups", "replicates", "test"]
     table = table[[c for c in cols if c in table.columns]]

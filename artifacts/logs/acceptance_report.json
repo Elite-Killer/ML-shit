@@ -1,0 +1,196 @@
+{
+  "generated_at": "2026-11-11T15:24:04+00:00",
+  "gates": [
+    {
+      "gate": "G1",
+      "status": "PASS",
+      "evidence": "/tmp/hoplite/workspace/artifacts/logs/environment_report.json",
+      "detail": "device=NVIDIA A100 80GB PCIe, torch=2.5.1+cu124"
+    },
+    {
+      "gate": "G2",
+      "status": "PASS",
+      "evidence": "/tmp/hoplite/workspace/data/manifests/data_manifest.csv, /tmp/hoplite/workspace/artifacts/reports/data_audit.md",
+      "detail": "collection=11720, c0=10015, extra=1705, class_counts_match=True"
+    },
+    {
+      "gate": "G3",
+      "status": "PASS",
+      "evidence": "/tmp/hoplite/workspace/data/manifests/splits.csv + /tmp/hoplite/workspace/data/manifests/split_summary.json",
+      "detail": "overlap_free=True, hash_frozen=True, sizes={'test': 1502, 'train': 7011, 'val': 1502}"
+    },
+    {
+      "gate": "G4",
+      "status": "PASS",
+      "evidence": "/tmp/hoplite/workspace/artifacts/checkpoints/dmahr/training_manifest.json",
+      "detail": "train_splits=['train'], val_splits=['val']"
+    },
+    {
+      "gate": "G5",
+      "status": "PASS",
+      "evidence": "/tmp/hoplite/workspace/artifacts/logs/dmahr_smoke.json, /tmp/hoplite/workspace/reports/license_audit.md",
+      "detail": "all_pass=True, geometry=True, reload_identical=True"
+    },
+    {
+      "gate": "G6",
+      "status": "PASS",
+      "evidence": "/tmp/hoplite/workspace/data/manifests/hair_screening.csv",
+      "detail": "frozen=True, hair_present=8993, B_written=8993, source=volume_listing, screen_failures=0"
+    },
+    {
+      "gate": "G7",
+      "status": "BLOCKED",
+      "evidence": "/tmp/hoplite/workspace/artifacts/checkpoints/vit",
+      "detail": "missing=3 ['C/42', 'C/123', 'C/2026']"
+    },
+    {
+      "gate": "G8",
+      "status": "BLOCKED",
+      "evidence": "/tmp/hoplite/workspace/artifacts/predictions",
+      "detail": "prediction_files=9, metric_files=9, missing=['C/42', 'C/123', 'C/2026']"
+    },
+    {
+      "gate": "G9",
+      "status": "PASS",
+      "evidence": "/tmp/hoplite/workspace/artifacts/logs/paired_psnr_ssim_test.csv",
+      "detail": "pairs=186, C_scored=186"
+    },
+    {
+      "gate": "G10",
+      "status": "PASS",
+      "evidence": "9 CSVs",
+      "detail": "rows=13518 tiers=['X1'] gradcam_overlap20=0.3796"
+    },
+    {
+      "gate": "G11",
+      "status": "PASS",
+      "evidence": "/tmp/hoplite/workspace/artifacts/logs/statistical_comparisons.csv",
+      "detail": "rows=10, endpoints=3"
+    },
+    {
+      "gate": "G12",
+      "status": "PASS",
+      "evidence": "/tmp/hoplite/workspace/artifacts/reports/final_research_report.md, /tmp/hoplite/workspace/artifacts/reports/artifact_inventory.csv",
+      "detail": "placeholders=[], inventory=True"
+    },
+    {
+      "gate": "G13",
+      "status": "BLOCKED",
+      "evidence": "/tmp/hoplite/workspace/artifacts/logs/reproduction_log.json",
+      "detail": "reproduction not run from README"
+    },
+    {
+      "gate": "G14",
+      "status": "PASS",
+      "evidence": "/tmp/hoplite/workspace/artifacts/reports",
+      "detail": "{'requirements_lock': True, 'readme': True, 'inventory': True, 'license_audit': True, 'final_report': True}"
+    }
+  ],
+  "functional_matrix": [
+    {
+      "id": "F01",
+      "status": "PASS",
+      "evidence": "environment_report.json"
+    },
+    {
+      "id": "F02",
+      "status": "PASS",
+      "evidence": "data_audit.json"
+    },
+    {
+      "id": "F03",
+      "status": "PASS",
+      "evidence": "splits.csv"
+    },
+    {
+      "id": "F04",
+      "status": "PENDING",
+      "evidence": "dermahair_source_mapping.csv"
+    },
+    {
+      "id": "F05",
+      "status": "PASS",
+      "evidence": "diffusion training manifest"
+    },
+    {
+      "id": "F06",
+      "status": "PASS",
+      "evidence": "hair_screening.csv"
+    },
+    {
+      "id": "F07",
+      "status": "PASS",
+      "evidence": "dmahr_smoke.json"
+    },
+    {
+      "id": "F08",
+      "status": "PASS",
+      "evidence": "vit checkpoints"
+    },
+    {
+      "id": "F09",
+      "status": "PASS",
+      "evidence": "matched config hashes"
+    },
+    {
+      "id": "F10",
+      "status": "PENDING",
+      "evidence": "9+ run dirs"
+    },
+    {
+      "id": "F11",
+      "status": "PASS",
+      "evidence": "predictions"
+    },
+    {
+      "id": "F12",
+      "status": "PASS",
+      "evidence": "psnr/ssim pairs"
+    },
+    {
+      "id": "F13",
+      "status": "PASS",
+      "evidence": "gradcam"
+    },
+    {
+      "id": "F14",
+      "status": "PASS",
+      "evidence": "rollout"
+    },
+    {
+      "id": "F15",
+      "status": "PASS",
+      "evidence": "mask tiers"
+    },
+    {
+      "id": "F16",
+      "status": "PASS",
+      "evidence": "stats csv"
+    },
+    {
+      "id": "F17",
+      "status": "PENDING",
+      "evidence": "reproduction log"
+    },
+    {
+      "id": "F18",
+      "status": "PASS",
+      "evidence": "inventory"
+    },
+    {
+      "id": "F19",
+      "status": "PENDING",
+      "evidence": "A* run dir"
+    },
+    {
+      "id": "F20",
+      "status": "PENDING",
+      "evidence": "compute_plan.md"
+    }
+  ],
+  "summary": {
+    "pass": 11,
+    "fail": 0,
+    "blocked": 3
+  }
+}

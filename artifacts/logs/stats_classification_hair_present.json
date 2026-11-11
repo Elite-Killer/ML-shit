@@ -1,0 +1,15 @@
+{
+  "arms": [
+    "A",
+    "B",
+    "Astar"
+  ],
+  "n_groups": 1251,
+  "n_images": 1316,
+  "observed_macro_f1": {
+    "A": 0.7485888108987749,
+    "Astar": 0.7347759476941961,
+    "B": 0.6911222263425096
+  },
+  "subset": "hair_present"
+}

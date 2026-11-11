@@ -239,6 +239,12 @@ def functional_matrix() -> list[dict]:
     def has(path: Path) -> bool:
         return path.exists()
 
+    def has_run(arm: str, seed: int) -> bool:
+        """A run counts if its result JSON is local or its weights are on the volume."""
+        if (ART / "checkpoints" / "vit" / f"{arm}_seed{seed}" / "train_result.json").exists():
+            return True
+        return f"{arm}_seed{seed}" in volume_listing("vit_run_dirs.txt")
+
     rows = []
     env = load_json(ART / "logs" / "environment_report.json")
     audit = load_json(ART / "logs" / "data_audit.json")
@@ -254,8 +260,8 @@ def functional_matrix() -> list[dict]:
     rows.append(("F07", bool(smoke and smoke.get("all_pass")), "dmahr_smoke.json"))
     rows.append(("F08", has(ART / "checkpoints" / "vit"), "vit checkpoints"))
     rows.append(("F09", has(ART / "checkpoints" / "vit"), "matched config hashes"))
-    rows.append(("F10", len(list((ART / "checkpoints" / "vit").glob("*/best.pt"))) >= 9,
-                 "9+ run dirs"))
+    rows.append(("F10", sum(has_run(a, s) for a in ("A", "B", "C", "Astar")
+                            for s in (42, 123, 2026)) >= 9, "9+ run dirs"))
     rows.append(("F11", has(ART / "predictions"), "predictions"))
     rows.append(("F12", has(ART / "logs" / "paired_psnr_ssim_test.csv"), "psnr/ssim pairs"))
     rows.append(("F13", len(list((ART / "logs").glob("xai_localization_*.csv"))) > 0, "gradcam"))
@@ -264,9 +270,8 @@ def functional_matrix() -> list[dict]:
     rows.append(("F16", has(ART / "logs" / "statistical_comparisons.csv"), "stats csv"))
     rows.append(("F17", has(ART / "logs" / "reproduction_log.json"), "reproduction log"))
     rows.append(("F18", has(ART / "reports" / "artifact_inventory.csv"), "inventory"))
-    rows.append(("F19", has(ART / "checkpoints" / "vit" / "Astar_seed42" / "best.pt"),
-                 "A* run dir"))
-    rows.append(("F20", has(ART / "reports" / "compute_plan.md"), "compute_plan.md"))
+    rows.append(("F19", has_run("Astar", 42), "A* run dir"))
+    rows.append(("F20", report_path("compute_plan.md").exists(), "compute_plan.md"))
     return [{"id": i, "status": "PASS" if ok else "PENDING", "evidence": ev}
             for i, ok, ev in rows]
 

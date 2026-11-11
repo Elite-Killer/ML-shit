@@ -64,3 +64,31 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
 - Finding: Arm C must process 8,993 hair-present images at ~4.35 s/image on A100-80GB, about 10.9 GPU-hours.
 - Decision: shard by image across containers with per-shard manifests, skip already-written outputs on restart, and commit the volume periodically. Reduced-step sampling is not used (it would need a separately labelled ablation).
 
+## D12 - Arm C run as a 1,000-step ablation (budget forced)
+
+- Finding: the account held $23. Full 2,000-step sampling of 8,993 images costs
+  about $21 on A100-40GB, leaving nothing for the three ViT C trainings,
+  evaluations and XAI passes. Measured throughput was 4.38 s/image at 2,000
+  steps and 2.18 s/image at 1,000 steps.
+- Decision: run Arm C at **1,000 sampling steps with bf16 autocast**, which
+  halves the cost and fits the balance. This is recorded as a labelled ablation
+  in the report, the config and every per-image CSV (`num_timesteps` column).
+- Reason: the kit permits reduced-step runs only as a labelled, justified
+  ablation. A complete four-arm comparison at reduced steps is more informative
+  than a missing arm, provided the deviation is stated plainly and never
+  presented as the paper's method.
+- Consequence: Arm C image quality and classification are expected to be worse
+  than a full-step run, and the measured results confirm that. The A-C and B-C
+  comparisons therefore answer "does a half-budget DM-AHR help?" and not "does
+  DM-AHR help?".
+
+## D13 - Arm C passthrough for hair-absent images
+
+- Finding: the sampler only processes hair-present images, but the ViT dataset
+  for Arm C reads every split image from `processed/C`. Hair-absent images were
+  therefore missing and training failed with `FileNotFoundError`.
+- Decision: copy the original image into `processed/C` for every hair-absent
+  image, matching the protocol rule that hair-absent images are identical in
+  every arm. Implemented in `scripts/05b_fill_c_passthrough.py`; all 1,022
+  images filled, giving 10,015 Arm C inputs.
+

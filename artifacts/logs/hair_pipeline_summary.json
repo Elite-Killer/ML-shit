@@ -17,8 +17,8 @@
   },
   "images": 10015,
   "screen_config_hash": "e232efe4705133a175ec50d5147954a6545456d469b6353fb42d348387704273",
-  "seconds_process": 438.437,
-  "seconds_synthetic": 17.137,
+  "seconds_process": 417.664,
+  "seconds_synthetic": 18.018,
   "synthetic_by_split": {
     "test": 186,
     "train": 654,

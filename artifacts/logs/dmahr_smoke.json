@@ -1,6 +1,6 @@
 {
   "all_pass": true,
-  "batch4_seconds": 39.72,
+  "batch4_seconds": 39.97,
   "batch_shape": [
     64,
     128,
@@ -10,37 +10,37 @@
   "batch_sweep": {
     "8": {
       "returned": 8,
-      "seconds": 48.33,
-      "seconds_per_image": 6.041
+      "seconds": 48.8,
+      "seconds_per_image": 6.1
     },
     "16": {
       "returned": 16,
-      "seconds": 75.08,
-      "seconds_per_image": 4.693
+      "seconds": 75.28,
+      "seconds_per_image": 4.705
     },
     "32": {
       "returned": 32,
-      "seconds": 139.26,
-      "seconds_per_image": 4.352
+      "seconds": 138.96,
+      "seconds_per_image": 4.343
     },
     "64": {
       "returned": 64,
-      "seconds": 262.44,
-      "seconds_per_image": 4.101
+      "seconds": 261.65,
+      "seconds_per_image": 4.088
     }
   },
-  "checkpoint": "/__modal/volumes/vo-6JWuL2MaxBaVrU6eGzMLBk/data/raw/dmahr_weights/I725000_E1083_gen.pth",
+  "checkpoint": "/__modal/volumes/vo-Yfgbqu0raQMBZb7syrtU35/data/raw/dmahr_weights/I725000_E1083_gen.pth",
   "checkpoint_sha256": "c99e406050d3aaf36473f76477bcfb8ba05d80a420d50d57533eac75b8c8d2fe",
   "device": "NVIDIA A100-SXM4-80GB",
   "finite": true,
   "geometry_preserved": true,
-  "load_seconds": 1.57,
+  "load_seconds": 1.86,
   "num_timesteps": 2000,
   "peak_memory_gb": 4.87,
   "range_ok": true,
   "reload_identical": true,
-  "seconds_per_image_batch4": 9.93,
-  "single_seconds": 37.81,
+  "seconds_per_image_batch4": 9.99,
+  "single_seconds": 38.96,
   "single_shape": [
     128,
     128,

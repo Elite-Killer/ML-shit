@@ -1,10 +1,10 @@
 {
-  "checkpoint": "/__modal/volumes/vo-6JWuL2MaxBaVrU6eGzMLBk/artifacts/checkpoints/dmahr/best_gen.pth",
+  "checkpoint": "/__modal/volumes/vo-Yfgbqu0raQMBZb7syrtU35/artifacts/checkpoints/dmahr/best_gen.pth",
   "n_shards": 1,
-  "num_timesteps": 2000,
-  "processed": 174,
-  "seconds": 847.8,
-  "seconds_per_image": 4.87,
+  "num_timesteps": 1000,
+  "processed": 154,
+  "seconds": 313.9,
+  "seconds_per_image": 2.04,
   "shard": 0,
   "source": "pairs_test"
 }

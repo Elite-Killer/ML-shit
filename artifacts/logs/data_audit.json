@@ -75,7 +75,7 @@
         "vasc": 21
       }
     },
-    "created_at": "2026-11-11T14:37:49+00:00",
+    "created_at": "2026-11-11T16:16:50+00:00",
     "fractions": {
       "test": 0.15,
       "train": 0.7,
@@ -136,7 +136,7 @@
   "mixed_class_groups": 0,
   "near_duplicates_confirmed": 21,
   "protocol_hash": "854c6da45d6bac6e12a34f3702816572a55529961265adbe48639a11584628a3",
-  "seconds": 22.489,
+  "seconds": 272.635,
   "split_verification": {
     "ok": true,
     "problems": [],

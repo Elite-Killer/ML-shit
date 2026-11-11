@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-11T15:57:20+00:00",
+  "generated_at": "2026-11-11T23:24:41+00:00",
   "gates": [
     {
       "gate": "G1",
@@ -39,15 +39,15 @@
     },
     {
       "gate": "G7",
-      "status": "BLOCKED",
+      "status": "PASS",
       "evidence": "/tmp/hoplite/workspace/artifacts/checkpoints/vit",
-      "detail": "missing=3 ['C/42', 'C/123', 'C/2026']"
+      "detail": "missing=0 []"
     },
     {
       "gate": "G8",
-      "status": "BLOCKED",
+      "status": "PASS",
       "evidence": "/tmp/hoplite/workspace/artifacts/predictions",
-      "detail": "prediction_files=9, metric_files=9, missing=['C/42', 'C/123', 'C/2026']"
+      "detail": "prediction_files=12, metric_files=12, missing=[]"
     },
     {
       "gate": "G9",
@@ -58,14 +58,14 @@
     {
       "gate": "G10",
       "status": "PASS",
-      "evidence": "9 CSVs",
-      "detail": "rows=13518 tiers=['X1'] gradcam_overlap20=0.3796"
+      "evidence": "12 CSVs",
+      "detail": "rows=18024 tiers=['X1'] gradcam_overlap20=0.3876"
     },
     {
       "gate": "G11",
       "status": "PASS",
       "evidence": "/tmp/hoplite/workspace/artifacts/logs/statistical_comparisons.csv",
-      "detail": "rows=10, endpoints=3"
+      "detail": "rows=14, endpoints=3"
     },
     {
       "gate": "G12",
@@ -189,8 +189,8 @@
     }
   ],
   "summary": {
-    "pass": 11,
+    "pass": 13,
     "fail": 0,
-    "blocked": 3
+    "blocked": 1
   }
 }

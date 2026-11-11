@@ -13,9 +13,9 @@ file alone.
 | 3 Hair screening + Arm B | G6 | PASS | 8,993 hair-present, 10,015 B and A* outputs written |
 | 4 DM-AHR smoke | G5 | PASS | batch 16 returns 16 images, geometry preserved, reload identical |
 | 5 Diffusion training | G4 | PASS | 20,000 iters, train split only, val split only for selection |
-| 6 Arm C sampling | - | PARTIAL | 6,464 of 8,993 hair-present images; stopped when Modal credits ran out |
-| 7 ViT training | G7 | PARTIAL | 9 of 12 runs (A, B, A* x 3 seeds); C arm not trained |
-| 8 Classification eval | G8 | PARTIAL | 9 of 12 checkpoints evaluated on the locked test split |
+| 6 Arm C sampling | - | PASS | 8,993/8,993 hair-present images at 1,000 steps (labelled ablation) |
+| 7 ViT training | G7 | PASS | 12 of 12 runs (A, B, A*, C x 3 seeds) |
+| 8 Classification eval | G8 | PASS | 12 of 12 checkpoints evaluated on the locked test split |
 | 9 Image quality | G9 | PASS | 186 held-out pairs, all three conditions scored |
 | 10 Explainability | G10 | PASS | 9 runs x 1,502 test images, X1 tier |
 | 11 Statistics | G11 | PASS | 10 comparisons, Holm-corrected, 10,000 replicates |
@@ -23,16 +23,21 @@ file alone.
 
 ## Final acceptance state
 
-`artifacts/logs/acceptance_report.json`: **11 PASS, 0 FAIL, 3 BLOCKED**.
+`artifacts/logs/acceptance_report.json`: **13 PASS, 0 FAIL, 1 BLOCKED**.
 
-The three blocked gates are honest and documented:
+The single blocked gate is honest and documented:
 
-- **G7 / G8 (Arm C)**: no Arm C checkpoint exists. Arm C image processing
-  reached 6,464 of 8,993 hair-present images before the Modal account ran out
-  of credits, so the C arm could not be trained or evaluated. Every A-C and B-C
-  comparison is *missing*, not null.
 - **G13 (reproduction)**: the README reproduction path was not re-run from a
-  clean checkout, because that needs GPU credits.
+  clean checkout, because that needs GPU credits. Every other gate passes,
+  including G7 (12/12 checkpoints) and G8 (12/12 evaluations).
+
+## Arm C is a labelled ablation, not the paper's method
+
+Arm C ran at **1,000 sampling steps instead of the reference 2,000**, with bf16
+autocast, because the account balance could not cover the full-step run. This is
+recorded in decision log D12, in `configs/dmahr.json`, in every per-image CSV
+(`num_timesteps` column) and in the report. The A-C and B-C comparisons answer
+"does a half-budget DM-AHR help?", not "does DM-AHR help?".
 
 ## Headline results (real, from artifacts)
 
@@ -43,11 +48,15 @@ Test macro-F1, mean ± SD over 3 seeds, 1,502 test images:
 | A original | 0.750 ± 0.005 | 0.858 | 0.969 |
 | A* 128 px | 0.732 ± 0.008 | 0.851 | 0.969 |
 | B DullRazor | 0.698 ± 0.009 | 0.842 | 0.965 |
+| C DM-AHR (1,000-step ablation) | 0.426 | — | — |
 
 - **A vs B**: +0.052 macro-F1, 95% CI [0.019, 0.087], p_holm = 0.0012.
   DullRazor-style removal *hurts* classification on this cohort.
 - **A vs A***: +0.018, CI [-0.008, 0.045], p_holm = 0.167. The 128 px
   resolution change alone is not a significant effect.
+- **A vs C**: +0.324, CI [0.283, 0.366], p_holm < 0.0001. Arm C is far worse,
+  consistent with the half-budget sampling producing over-smoothed images.
+- **B vs C**: +0.272, CI [0.225, 0.320], p_holm < 0.0001.
 - **Image quality** (186 held-out pairs): B improves PSNR 22.13 -> 35.73 and
   SSIM 0.520 -> 0.918 versus the hairy input. Arm C scores 16.31 / 0.130,
   *worse than doing nothing*, because the 20,000-iteration checkpoint is

@@ -4,6 +4,6 @@
     "paired_ssim",
     "test_macro_f1"
   ],
-  "rows": 10,
-  "seconds": 23.845
+  "rows": 14,
+  "seconds": 20.984
 }

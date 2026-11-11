@@ -4,7 +4,7 @@
 
 ## Summary
 
-Test macro-F1 by arm (mean ± SD over seeds): Original 0.750 ± 0.005; A* (128 px) 0.732 ± 0.008; DullRazor 0.698 ± 0.009.
+Test macro-F1 by arm (mean ± SD over seeds): Original 0.750 ± 0.005; A* (128 px) 0.732 ± 0.008; DullRazor 0.698 ± 0.009; DM-AHR 0.426 ± 0.013.
 
 The hypotheses were that DM-AHR hair removal improves image fidelity, classification and explanation localization relative to the classical baseline. The results below are reported as measured; a null or negative result is a valid outcome and is not reframed.
 
@@ -34,8 +34,8 @@ Hair-absent images are identical across arms. Arm A* exists because DM-AHR is na
 - Pinned commit: `0aee1bbabf788a59be5e1eecddc20f533b5006d8`
 - Released checkpoint SHA-256: `c99e406050d3aaf36473f76477bcfb8ba05d80a420d50d57533eac75b8c8d2fe`
 - Smoke test passed: True (geometry preserved True, reload identical True)
-- Sampling throughput: {'8': {'returned': 8, 'seconds': 48.33, 'seconds_per_image': 6.041}, '16': {'returned': 16, 'seconds': 75.08, 'seconds_per_image': 4.693}, '32': {'returned': 32, 'seconds': 139.26, 'seconds_per_image': 4.352}, '64': {'returned': 64, 'seconds': 262.44, 'seconds_per_image': 4.101}}
-- Leakage-controlled training: 20000 iterations, best validation L1 0.01680
+- Sampling throughput: {'8': {'returned': 8, 'seconds': 48.8, 'seconds_per_image': 6.1}, '16': {'returned': 16, 'seconds': 75.28, 'seconds_per_image': 4.705}, '32': {'returned': 32, 'seconds': 138.96, 'seconds_per_image': 4.343}, '64': {'returned': 64, 'seconds': 261.65, 'seconds_per_image': 4.088}}
+- Leakage-controlled training: 20000 iterations, best validation L1 0.01703
 
 The released weights are used for the smoke test only, because the authors do not document their training data. Arm C uses the checkpoint trained here on train-split sources only.
 
@@ -50,9 +50,11 @@ The released weights are used for the smoke test only, because the authors do no
 | A | full | 3 | 0.750 | 0.005 | 0.858 | 0.012 | 0.735 | 0.969 | 1502 |
 | Astar | full | 3 | 0.732 | 0.008 | 0.851 | 0.006 | 0.726 | 0.969 | 1502 |
 | B | full | 3 | 0.698 | 0.009 | 0.842 | 0.005 | 0.687 | 0.965 | 1502 |
+| C | full | 3 | 0.426 | 0.013 | 0.685 | 0.019 | 0.452 | 0.878 | 1502 |
 | A | hair_present | 3 | 0.749 | 0.002 | 0.843 | 0.013 | 0.736 | 0.966 | 1316 |
 | Astar | hair_present | 3 | 0.735 | 0.013 | 0.836 | 0.008 | 0.735 | 0.966 | 1316 |
 | B | hair_present | 3 | 0.691 | 0.009 | 0.824 | 0.006 | 0.680 | 0.960 | 1316 |
+| C | hair_present | 3 | 0.411 | 0.017 | 0.651 | 0.018 | 0.440 | 0.864 | 1316 |
 
 
 ### Per-class test metrics (full test split)
@@ -73,6 +75,13 @@ The released weights are used for the smoke test only, because the authors do no
 | B | mel | 167 | 0.561 | 0.039 | 0.529 | 0.957 | 0.935 |
 | B | nv | 1006 | 0.942 | 0.002 | 0.958 | 0.844 | 0.980 |
 | B | vasc | 21 | 0.853 | 0.014 | 0.825 | 0.998 | 0.991 |
+| C | akiec | 49 | 0.286 | 0.019 | 0.408 | 0.952 | 0.911 |
+| C | bcc | 77 | 0.315 | 0.043 | 0.290 | 0.971 | 0.881 |
+| C | bkl | 165 | 0.356 | 0.024 | 0.461 | 0.863 | 0.791 |
+| C | df | 17 | 0.140 | 0.073 | 0.137 | 0.990 | 0.863 |
+| C | mel | 167 | 0.400 | 0.024 | 0.373 | 0.939 | 0.820 |
+| C | nv | 1006 | 0.871 | 0.018 | 0.827 | 0.855 | 0.922 |
+| C | vasc | 21 | 0.615 | 0.090 | 0.667 | 0.993 | 0.955 |
 | Astar | akiec | 49 | 0.556 | 0.042 | 0.673 | 0.974 | 0.961 |
 | Astar | bcc | 77 | 0.747 | 0.051 | 0.719 | 0.989 | 0.982 |
 | Astar | bkl | 165 | 0.677 | 0.015 | 0.630 | 0.971 | 0.949 |
@@ -111,6 +120,9 @@ PSNR/SSIM are computed only against genuine hairless references from synthetic p
 | B | 123 | X1 | 1502 | 0.411 | 0.547 | 0.463 | 0.851 | 0.200 | 0.644 |
 | B | 2026 | X1 | 1502 | 0.354 | 0.538 | 0.458 | 0.797 | 0.200 | 0.644 |
 | B | 42 | X1 | 1502 | 0.390 | 0.605 | 0.519 | 0.871 | 0.200 | 0.644 |
+| C | 123 | X1 | 1502 | 0.381 | 0.322 | 0.572 | 0.212 | 0.200 | 0.644 |
+| C | 2026 | X1 | 1502 | 0.406 | 0.342 | 0.608 | 0.260 | 0.200 | 0.644 |
+| C | 42 | X1 | 1502 | 0.448 | 0.347 | 0.670 | 0.255 | 0.200 | 0.644 |
 
 
 Localization measures spatial alignment with released lesion masks, not clinically correct reasoning. X1 masks are the released HAM10000 segmentations; the source does not state they were expert-traced, so they are not described as expert masks.
@@ -127,8 +139,12 @@ Localization measures spatial alignment with released lesion masks, not clinical
 | paired_ssim | held_out_pairs | C-hairy input | 0.130 | 0.520 | -0.390 | -0.404 | -0.377 | 0.000 | 0.000 | -4.138 | 186 |
 | test_macro_f1 | full | A-Astar | 0.750 | 0.732 | 0.018 | -0.008 | 0.045 | 0.167 | 0.167 | 0.048 | 1437 |
 | test_macro_f1 | full | A-B | 0.750 | 0.698 | 0.052 | 0.019 | 0.087 | 0.001 | 0.001 | 0.056 | 1437 |
+| test_macro_f1 | full | A-C | 0.750 | 0.426 | 0.324 | 0.283 | 0.366 | 0.000 | 0.000 | 0.469 | 1437 |
+| test_macro_f1 | full | B-C | 0.698 | 0.426 | 0.272 | 0.225 | 0.320 | 0.000 | 0.000 | 0.430 | 1437 |
 | test_macro_f1 | hair_present | A-Astar | 0.749 | 0.735 | 0.014 | -0.014 | 0.041 | 0.322 | 0.322 | 0.049 | 1251 |
 | test_macro_f1 | hair_present | A-B | 0.749 | 0.691 | 0.058 | 0.022 | 0.095 | 0.001 | 0.001 | 0.066 | 1251 |
+| test_macro_f1 | hair_present | A-C | 0.749 | 0.411 | 0.337 | 0.291 | 0.383 | 0.000 | 0.000 | 0.505 | 1251 |
+| test_macro_f1 | hair_present | B-C | 0.691 | 0.411 | 0.279 | 0.224 | 0.333 | 0.000 | 0.000 | 0.456 | 1251 |
 
 
 Test: paired lesion-group bootstrap, 10,000 replicates, the same resample shared across arms and seeds, percentile 95% CI, two-sided. Holm correction is applied across the three planned comparisons within each endpoint and subset. A difference whose CI spans zero is reported as inconclusive, not as no difference.

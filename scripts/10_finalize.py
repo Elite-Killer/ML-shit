@@ -215,7 +215,13 @@ def build_report() -> str:
     L.append("## Classification results\n")
     have_c = any((artifact_dir("checkpoints", "vit", f"C_seed{s}") / "best.pt").exists()
                  for s in (42, 123, 2026))
-    if not have_c:
+    if have_c:
+        L.append("**Arm C was run as a budget-forced ablation: 1,000 sampling steps "
+                 "instead of the reference 2,000.** The account balance could not "
+                 "cover the full-step run, so Arm C is half the reference sampling "
+                 "budget. Its results are reported as an ablation and must not be "
+                 "read as DM-AHR at the paper's settings. See decision log D12.\n")
+    else:
         L.append("**Arm C classification is not reported: no Arm C checkpoint was "
                  "trained.** Arm C image processing stopped at 6,464 of 8,993 "
                  "hair-present images when the Modal account ran out of credits, so "

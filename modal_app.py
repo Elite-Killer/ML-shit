@@ -381,6 +381,25 @@ def vit_eval(arm: str, seed: int):
     return _run("07_eval_vit.py", ["--arm", arm, "--seed", str(seed)])
 
 
+@app.function(image=image, gpu="A100-80GB", timeout=7200, volumes={"/vol": vol})
+def vit_eval_repro(arm: str = "A", seed: int = 42):
+    """Re-evaluate into a scratch artifact root, then diff against the recorded run."""
+    repro_root = "/vol/artifacts/repro_check"
+    _run("07_eval_vit.py", ["--arm", arm, "--seed", str(seed),
+                            "--out-dir", os.path.join(repro_root, "predictions")])
+    return _run("21_verify_reconstruction.py", ["--arm", arm, "--seed", str(seed)])
+
+
+@app.function(image=image, gpu="A100-80GB", timeout=3600, volumes={"/vol": vol})
+def transform_sweep():
+    return _run("23_transform_sweep.py")
+
+
+@app.function(image=image, gpu="A100-80GB", timeout=3600, volumes={"/vol": vol})
+def resize_sweep():
+    return _run("24_resize_sweep.py")
+
+
 @app.function(image=image, cpu=8, memory=32768, timeout=7200, volumes={"/vol": vol})
 def image_quality(split: str = "test"):
     return _run("07b_image_quality.py", ["--split", split])
@@ -396,6 +415,11 @@ def stats_run():
     return _run("09_stats.py")
 
 
+@app.function(image=image, cpu=8, memory=32768, timeout=7200, volumes={"/vol": vol})
+def exploratory_stats():
+    return _run("22_exploratory_stats.py")
+
+
 @app.function(image=image, cpu=4, memory=16384, timeout=3600, volumes={"/vol": vol})
 def acceptance():
     return _run("check_acceptance.py")
@@ -407,7 +431,7 @@ def finalize():
 
 
 @app.function(image=image, gpu="A100-80GB", timeout=86400, volumes={"/vol": vol})
-def eval_and_xai_all(arms: str = "A,B,Astar,C"):
+def eval_and_xai_all(arms: str = "A,B,Astar,C", force: bool = False):
     """Locked test evaluation then XAI for every checkpoint that exists."""
     done = []
     for arm in [a for a in arms.split(",") if a]:
@@ -417,10 +441,10 @@ def eval_and_xai_all(arms: str = "A,B,Astar,C"):
                 print("skip (no checkpoint):", ckpt, flush=True)
                 continue
             pred = f"/vol/artifacts/predictions/metrics_{arm}_seed{seed}.json"
-            if not os.path.exists(pred):
+            if force or not os.path.exists(pred):
                 _run("07_eval_vit.py", ["--arm", arm, "--seed", str(seed)])
             xai = f"/vol/artifacts/logs/xai_summary_{arm}_seed{seed}_X1.json"
-            if not os.path.exists(xai):
+            if force or not os.path.exists(xai):
                 _run("08_xai.py", ["--arm", arm, "--seed", str(seed)])
             done.append(f"{arm}/{seed}")
     return done

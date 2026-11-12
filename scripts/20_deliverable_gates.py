@@ -148,15 +148,16 @@ def v6() -> None:
 def v7() -> None:
     docs = ["Preprocessing_Report.docx", "Results_Report.docx", "Code_Guide_Report.docx"]
     ok = all((ART / "reports" / d).exists() for d in docs)
-    # PDF rendering is done separately with soffice; record the page counts if present.
+    # PDFs are rendered with soffice and stored beside the .docx on the volume,
+    # so the evidence survives a sandbox wipe instead of living in /tmp.
     pages = {}
     for d in docs:
-        pdf = Path("/tmp/verify") / d.replace(".docx", ".pdf")
+        pdf = ART / "reports" / d.replace(".docx", ".pdf")
         if pdf.exists():
             import pymupdf
             pages[d] = pymupdf.open(pdf).page_count
     gate("V7", "All three .docx present and rendered to PDF",
-         ok and len(pages) == 3, "artifacts/reports/*.docx, /tmp/verify/*.pdf",
+         ok and len(pages) == 3, "artifacts/reports/*.docx, artifacts/reports/*.pdf",
          json.dumps(pages))
 
 

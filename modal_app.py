@@ -41,6 +41,7 @@ image = (
         "gdown==5.2.0",
         "python-docx==1.1.2",
         "pytest==8.3.4",
+        "pymupdf==1.24.14",
     )
     .env(
         {

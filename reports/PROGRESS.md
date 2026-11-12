@@ -185,3 +185,35 @@ Nothing outstanding on the research question. Remaining known gaps: Arm C needs
 the full training budget to be a fair test of published DM-AHR (D1, D12), and
 V7's PDF rendering evidence needs a machine with LibreOffice.
 
+## 2026-11-12 - Delivery package complete
+
+- **Deliverable gates: 8 of 8 pass.** V7 now checks PDFs stored beside the
+  .docx on the volume instead of a `/tmp` scratch directory, so the evidence
+  survives a sandbox wipe. The three reports were rendered with LibreOffice:
+  Preprocessing 10 pages, Results 8 pages, Code Guide 14 pages.
+- **Acceptance: 13 of 14 pass, G4 blocked.** G4 is the only non-pass and it is
+  a documented blocker, which the criteria allow: no leakage-controlled
+  diffusion training run exists at a realistic budget (D1, D12). The released
+  checkpoint arm answers the DM-AHR question that G4 would have answered.
+- **Inventory refreshed** to 295 entries including the Creleased artifacts.
+- **Handover package (criteria section D)** is present: source and configs,
+  `requirements.lock`, README with Modal commands and `modal volume get`
+  retrieval lines, manifests and frozen splits, licence audit, DullRazor and
+  DM-AHR scripts, 15 ViT checkpoints plus the diffusion checkpoint, run
+  registry, per-image predictions, classification tables, PSNR/SSIM pair CSV,
+  Grad-CAM and rollout outputs, statistical CSVs, final report in Markdown,
+  DOCX and PDF, artifact inventory with SHA-256, and the research-only
+  statement.
+
+## Delivery caveats to state to the client
+
+1. Arm C (our diffusion run) is under-resourced and is not a fair test of
+   published DM-AHR. The released-checkpoint arm (Creleased) is the fair test
+   and it does not beat classical removal or original images.
+2. DERMAHAIR was unavailable, so image quality uses 186 synthetic pairs and the
+   hair detector is unvalidated on real hair.
+3. Licensing is unresolved: HAM10000 is CC BY-NC 4.0 and the DM-AHR repository
+   contradicts itself between README and LICENSE. Commercial use needs a rights
+   decision.
+4. Single public dataset, research prototype only, not clinically validated.
+

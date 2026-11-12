@@ -26,7 +26,8 @@ h1, h2, body, bullet, table, callout, figure = (
     pre.h1, pre.h2, pre.body, pre.bullet, pre.table, pre.callout, pre.figure)
 add_page_number = pre.add_page_number
 ARM_LABEL = {"A": "A — original", "Astar": "A* — 128 px control",
-             "B": "B — DullRazor classical", "C": "C — DM-AHR diffusion"}
+             "B": "B — DullRazor classical", "C": "C — DM-AHR diffusion",
+             "Creleased": "Creleased — released ckpt"}
 
 OUT = artifact_dir("reports") / "Results_Report.docx"
 
@@ -57,14 +58,18 @@ def build() -> Path:
     per_class = pd.read_csv(logs / "classification_per_class.csv")
     stats = pd.read_csv(logs / "statistical_comparisons.csv")
     quality = pd.read_csv(logs / "paired_psnr_ssim_test.csv")
-    xai = pd.concat([pd.read_csv(f) for f in sorted(logs.glob("xai_localization_*.csv"))],
-                    ignore_index=True)
+    # Exclude the `_v2_` diagnostic generation: it uses different columns and
+    # would otherwise be averaged together with the reported measurements.
+    xai = pd.concat([pd.read_csv(f) for f in sorted(logs.glob("xai_localization_*.csv"))
+                     if "_v2_" not in f.name], ignore_index=True)
     env = json.loads((logs / "environment_report.json").read_text())
     repro = json.loads((logs / "reproduction_log.json").read_text()) \
         if (logs / "reproduction_log.json").exists() else {}
 
     full = seed[seed["subset"] == "full"].set_index("arm").loc[
-        ["A", "Astar", "B", "C"]].reset_index()
+        ["A", "Astar", "B", "C", "Creleased"]].reset_index()
+    expl_path = logs / "statistical_comparisons_exploratory.csv"
+    expl = pd.read_csv(expl_path) if expl_path.exists() else pd.DataFrame()
 
     doc = Document()
     sec = doc.sections[0]
@@ -96,20 +101,26 @@ def build() -> Path:
     best = full.loc[full["macro_f1_mean"].idxmax()]
     worst = full.loc[full["macro_f1_mean"].idxmin()]
     callout(doc, "In one sentence",
-            f"Across 12 trained models (4 arms × 3 seeds) evaluated once on a locked test set of "
+            f"Across 15 trained models (5 arms × 3 seeds) evaluated once on a locked test set of "
             f"1,502 images, the best arm was {ARM_LABEL[best['arm']]} at macro-F1 "
-            f"{best['macro_f1_mean']:.3f}, and every comparison against the diffusion arm "
-            f"{ARM_LABEL[worst['arm']]} ({worst['macro_f1_mean']:.3f}) was statistically "
-            f"clear — but the diffusion arm was under-resourced, so the honest conclusion is "
-            f"'this run of DM-AHR did not help', not 'DM-AHR cannot help'.")
+            f"{best['macro_f1_mean']:.3f}. Our own diffusion arm "
+            f"{ARM_LABEL[worst['arm']]} ({worst['macro_f1_mean']:.3f}) was far behind, and the "
+            f"authors' released checkpoint (Creleased, "
+            f"{full[full['arm'] == 'Creleased']['macro_f1_mean'].iloc[0]:.3f}) closed most of that "
+            f"gap but still did not beat classical DullRazor or original images. The honest "
+            f"conclusion is 'hair removal did not help this classifier', not 'DM-AHR cannot "
+            f"remove hair' — the released checkpoint does remove hair, it just does not improve "
+            f"classification.")
     doc.add_page_break()
 
     h1(doc, "1. What was trained and how")
     body(doc,
-         "Twelve Vision Transformers were trained: four input conditions (arms) at three random "
+         "Fifteen Vision Transformers were trained: five input conditions (arms) at three random "
          "seeds each. Everything except the arm is identical — same frozen split, same manifests, "
          "same architecture, hyperparameters, augmentation and evaluation code — so a difference "
-         "between arms is attributable to the hair-removal condition alone.")
+         "between arms is attributable to the hair-removal condition alone. Creleased is the "
+         "authors' released DM-AHR checkpoint run through our pipeline at a 25-step respaced "
+         "schedule; it was added after the protocol was frozen and is reported as exploratory.")
     table(doc, ["Arm", "Input the classifier sees", "Macro-F1 (mean ± SD)"],
           [[ARM_LABEL[a], desc,
             f"{full[full['arm'] == a]['macro_f1_mean'].iloc[0]:.3f} ± "
@@ -117,9 +128,11 @@ def build() -> Path:
            for a, desc in [("A", "untouched dermoscopy image"),
                            ("B", "classical hair removal (DullRazor-style)"),
                            ("C", "diffusion-generated hairless image"),
-                           ("Astar", "original through the same 128 px round-trip")]],
+                           ("Astar", "original through the same 128 px round-trip"),
+                           ("Creleased", "released DM-AHR checkpoint, 25-step respaced "
+                                         "(exploratory)")]],
           widths=[1.7, 3.0, 1.6], align_right_from=2)
-    h2(doc, "Training recipe (identical for all twelve runs)")
+    h2(doc, "Training recipe (identical for all fifteen runs)")
     table(doc, ["Component", "Setting"],
           [["Backbone", "ViT-B/16, ImageNet-1k pretrained, 224 px input, 196 patches"],
            ["Optimiser", "AdamW, lr 3e-5, weight decay 0.05, warm-up 5 epochs then cosine decay"],
@@ -151,7 +164,7 @@ def build() -> Path:
     hp = seed[seed["subset"] == "hair_present"].set_index("arm")
     table(doc, ["Arm", "Macro-F1", "n"],
           [[ARM_LABEL[a], f"{hp.loc[a, 'macro_f1_mean']:.3f} ± {hp.loc[a, 'macro_f1_sd']:.3f}",
-            int(hp.loc[a, 'n'])] for a in ["A", "Astar", "B", "C"]],
+            int(hp.loc[a, 'n'])] for a in ["A", "Astar", "B", "C", "Creleased"]],
           widths=[2.2, 1.9, 0.8], align_right_from=1)
     body(doc,
          "This is the subset where hair removal actually operates — the images it could help. "
@@ -160,7 +173,7 @@ def build() -> Path:
     h2(doc, "Per-class test metrics")
     rows = []
     for cls in ["akiec", "bcc", "bkl", "df", "mel", "nv", "vasc"]:
-        for arm in ["A", "B", "C", "Astar"]:
+        for arm in ["A", "B", "C", "Astar", "Creleased"]:
             q = per_class[(per_class["arm"] == arm) & (per_class["class"] == cls)]
             if len(q):
                 r = q.iloc[0]
@@ -181,17 +194,23 @@ def build() -> Path:
          f"hair-absent images, so a true hairless reference exists. The unprocessed hairy input is "
          f"scored as a floor: falling below it means the method made the image worse than doing "
          f"nothing.")
+    qrows = [["Hairy input (floor)",
+              f"{quality['hairy_input_psnr'].mean():.2f} ± {quality['hairy_input_psnr'].std():.2f}",
+              f"{quality['hairy_input_ssim'].mean():.3f} ± {quality['hairy_input_ssim'].std():.3f}"],
+             ["Arm B — classical",
+              f"{quality['B_psnr'].mean():.2f} ± {quality['B_psnr'].std():.2f}",
+              f"{quality['B_ssim'].mean():.3f} ± {quality['B_ssim'].std():.3f}"]]
+    if "Creleased_psnr" in quality.columns and quality["Creleased_psnr"].notna().any():
+        qrows.append(["Creleased — released ckpt",
+                      f"{quality['Creleased_psnr'].mean():.2f} ± "
+                      f"{quality['Creleased_psnr'].std():.2f}",
+                      f"{quality['Creleased_ssim'].mean():.3f} ± "
+                      f"{quality['Creleased_ssim'].std():.3f}"])
+    qrows.append(["Arm C — diffusion",
+                  f"{quality['C_psnr'].mean():.2f} ± {quality['C_psnr'].std():.2f}",
+                  f"{quality['C_ssim'].mean():.3f} ± {quality['C_ssim'].std():.3f}"])
     table(doc, ["Condition", "PSNR (dB) mean ± SD", "SSIM mean ± SD"],
-          [["Hairy input (floor)",
-            f"{quality['hairy_input_psnr'].mean():.2f} ± {quality['hairy_input_psnr'].std():.2f}",
-            f"{quality['hairy_input_ssim'].mean():.3f} ± {quality['hairy_input_ssim'].std():.3f}"],
-           ["Arm B — classical",
-            f"{quality['B_psnr'].mean():.2f} ± {quality['B_psnr'].std():.2f}",
-            f"{quality['B_ssim'].mean():.3f} ± {quality['B_ssim'].std():.3f}"],
-           ["Arm C — diffusion",
-            f"{quality['C_psnr'].mean():.2f} ± {quality['C_psnr'].std():.2f}",
-            f"{quality['C_ssim'].mean():.3f} ± {quality['C_ssim'].std():.3f}"]],
-          widths=[1.9, 2.1, 2.1], align_right_from=1)
+          qrows, widths=[1.9, 2.1, 2.1], align_right_from=1)
     callout(doc, "Why Arm C scores below the untouched input — diagnosed",
             "A diagnosis on validation pairs separates the two candidate causes. A hairless "
             "reference round-trips through the same inference path at PSNR 34.6 / SSIM 0.990, and "
@@ -214,7 +233,7 @@ def build() -> Path:
                                "gradcam_pointing", "rollout_pointing",
                                "chance_uniform_overlap20",
                                "chance_gaussian_overlap20"]].mean()
-           .loc[["A", "Astar", "B", "C"]])
+           .loc[["A", "Astar", "B", "C", "Creleased"]])
     table(doc, ["Arm", "Grad-CAM overlap", "Roll-out overlap", "Grad-CAM pointing",
                 "Roll-out pointing", "Uniform chance", "Gaussian chance"],
           [[ARM_LABEL[i], f"{r['gradcam_overlap20']:.3f}", f"{r['rollout_overlap20']:.3f}",
@@ -261,6 +280,23 @@ def build() -> Path:
     table(doc, ["Endpoint", "Comparison", "Diff.", "95% CI (bootstrap)",
                  "p (Holm)", "Wilcoxon p (per-group acc.)", "Groups"],
           rows, widths=[1.35, 0.95, 0.6, 1.25, 0.72, 0.9, 0.55], font=8, align_right_from=2)
+    if not expl.empty:
+        h2(doc, "Exploratory: released-checkpoint arm")
+        body(doc,
+             "These rows are not part of the pre-registered family. Creleased uses the authors' "
+             "released DM-AHR checkpoint at a 25-step respaced schedule, a deviation from the "
+             "paper's 2,000 steps, and its classifier was trained on our budget. Holm correction "
+             "is applied within this exploratory family only.", size=9.5, italic=True)
+        erows = []
+        for r in expl.itertuples():
+            erows.append([r.endpoint, r.comparison, f"{r.difference:+.3f}",
+                          f"{r.ci_low:+.3f} to {r.ci_high:+.3f}",
+                          f"{r.p_holm:.4f}" if r.p_holm >= 0.0001 else "<0.0001",
+                          f"{r.effect_size_dz:+.3f}", f"{r.n_groups}"])
+        table(doc, ["Endpoint", "Comparison", "Diff.", "95% CI (bootstrap)",
+                    "p (Holm)", "Cohen's dz", "Groups"],
+              erows, widths=[1.35, 1.15, 0.6, 1.25, 0.72, 0.7, 0.55], font=8,
+              align_right_from=2)
 
     h1(doc, "6. What this says about the three hypotheses")
     psnr = row(stats, "paired_psnr", "C-B")
@@ -269,16 +305,21 @@ def build() -> Path:
     ro = row(stats, "x1_rollout_overlap20", "A-C")
     body(doc, "H1 — image quality (diffusion preserves texture better than classical): ",
          space_after=2)
+    c_ssim = quality["C_ssim"].dropna()
     bullet(doc, f"PSNR: {verdict(psnr)}. SSIM: {verdict(ssim)}. H1 is not supported by these "
-                "data. The caveat is unresolved, not merely a budget note: Arm C's SSIM is "
-                "near-constant across all 186 pairs (0.130 ± 0.010, with 185 below 0.15), which "
-                "fits either an undertrained model or a defect in the inference path. The "
-                "released checkpoint has not been scored through this adapter, so H1 is best "
-                "read as untested for DM-AHR rather than as evidence against it.")
+                f"data. Arm C's SSIM is near-constant across all {len(c_ssim)} pairs "
+                f"({c_ssim.mean():.3f} ± {c_ssim.std():.3f}, with "
+                f"{int((c_ssim < 0.15).sum())} below 0.15), which fits an undertrained model. "
+                "The released checkpoint was then scored through the same adapter (Creleased): "
+                "it clears the hairy-input floor by 4.95 dB but sits 8.66 dB below classical "
+                "inpainting, so H1 is now tested for DM-AHR and is not supported.")
     body(doc, "H2 — classification (diffusion-cleaned images improve the ViT): ", space_after=2)
     bullet(doc, f"A vs C: {verdict(row(stats, 'test_macro_f1', 'A-C', 'full'))}. "
                 f"B vs C: {verdict(row(stats, 'test_macro_f1', 'B-C', 'full'))}. The direction is "
-                "opposite to the hypothesis and the gap is large.")
+                "opposite to the hypothesis and the gap is large. The released checkpoint does "
+                "not rescue it: A vs Creleased is +0.038 (95% CI +0.005 to +0.071, Holm p=0.048, "
+                "negligible effect) and B vs Creleased is inconclusive (-0.015, CI -0.049 to "
+                "+0.019, Holm p=0.400).")
     body(doc, "H3 — explainability (attention focuses more on lesions after diffusion): ",
          space_after=2)
     bullet(doc, f"Grad-CAM overlap, A vs C: {verdict(gc)}. Attention roll-out, A vs C: "
@@ -295,12 +336,17 @@ def build() -> Path:
 
     h1(doc, "7. Limitations")
     for lead, txt in [
-        ("Arm C is undiagnosed as well as under-resourced — ",
+        ("Arm C is under-resourced, and the cause is diagnosed — ",
          "It ran 20,000 training iterations (the upstream config's n_iter is 660,000 and the "
          "released checkpoint is named I725000_E1083), 1,000 sampling steps against 2,000, and "
-         "128 px upsampled to 224. Its output scores below the unprocessed input with "
-         "near-constant SSIM, which has not been attributed to budget or to the inference path. "
-         "Its results describe that model, not the published method."),
+         "128 px upsampled to 224. A hairless reference round-trips through the same inference "
+         "path at PSNR 34.6 / SSIM 0.990, so the adapter is sound and the checkpoint is "
+         "undertrained. Its results describe that model, not the published method."),
+        ("Creleased is exploratory, not pre-registered — ",
+         "It uses the authors' released checkpoint at a 25-step respaced schedule, a deviation "
+         "from the paper's 2,000 steps, and its classifier was trained on our budget rather than "
+         "the paper's. Its comparisons are reported in their own Holm family and must not be "
+         "read as pre-registered results."),
         ("Three seeds — ",
          "inference is over ~1,437 lesion groups with seeds averaged inside each replicate, "
          "never counted as independent samples; still, three seeds cannot characterise variance "

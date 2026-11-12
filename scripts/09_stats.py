@@ -328,17 +328,24 @@ def paired_column_endpoint(df: pd.DataFrame, col_a: str, col_b: str, endpoint: s
 
 
 def xai_rows(metric: str, reps: int, bseed: int, comparisons: list) -> list:
-    files = sorted(artifact_dir("logs").glob("xai_localization_*.csv"))
+    # `_v2_` files come from a separate diagnostic analysis with different
+    # columns; mixing them into the reported endpoints would average two
+    # different measurements of the same arm.
+    files = sorted(f for f in artifact_dir("logs").glob("xai_localization_*.csv")
+                   if "_v2_" not in f.name)
     if not files:
         return []
     df = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
+    # XAI runs recorded before group_id was written to the CSV: recover it from
+    # the frozen split so explainability endpoints still aggregate by lesion
+    # rather than by image. Backfill per row, because a mixed set of files can
+    # have the column present but empty for the older runs.
     if "group_id" not in df.columns:
-        # XAI runs recorded before group_id was written to the CSV: recover it
-        # from the frozen split so explainability endpoints still aggregate by
-        # lesion rather than by image.
+        df["group_id"] = pd.NA
+    if df["group_id"].isna().any():
         masks = pd.read_csv(manifest_dir() / "mask_manifest_x1.csv")
         mapping = dict(zip(masks["image_id"], masks["group_id"]))
-        df["group_id"] = df["image_id"].map(mapping)
+        df["group_id"] = df["group_id"].fillna(df["image_id"].map(mapping))
     if metric not in df.columns or "group_id" not in df.columns:
         return []
     # One value per (arm, seed, group) before resampling.

@@ -124,6 +124,15 @@ PSNR/SSIM are computed only against genuine hairless references from synthetic p
 
 | arm | seed | tier | n | gradcam_overlap20 | rollout_overlap20 | gradcam_pointing | rollout_pointing | chance_uniform | chance_gaussian |
 |---|---|---|---|---|---|---|---|---|---|
+| A | 123 | X1 | 1502 | 0.439 | 0.514 | 0.565 | 0.754 | 0.200 | 0.644 |
+| A | 2026 | X1 | 1502 | 0.426 | 0.549 | 0.535 | 0.870 | 0.200 | 0.644 |
+| A | 42 | X1 | 1502 | 0.223 | 0.601 | 0.303 | 0.901 | 0.200 | 0.644 |
+| Astar | 123 | X1 | 1502 | 0.477 | 0.540 | 0.637 | 0.784 | 0.200 | 0.644 |
+| Astar | 2026 | X1 | 1502 | 0.357 | 0.607 | 0.446 | 0.926 | 0.200 | 0.644 |
+| Astar | 42 | X1 | 1502 | 0.378 | 0.585 | 0.524 | 0.864 | 0.200 | 0.644 |
+| B | 123 | X1 | 1502 | 0.411 | 0.547 | 0.463 | 0.851 | 0.200 | 0.644 |
+| B | 2026 | X1 | 1502 | 0.363 | 0.607 | 0.499 | 0.906 | 0.200 | 0.644 |
+| B | 42 | X1 | 1502 | 0.390 | 0.605 | 0.519 | 0.871 | 0.200 | 0.644 |
 | C | 123 | X1 | 1502 | 0.381 | 0.322 | 0.572 | 0.212 | 0.200 | 0.644 |
 | C | 2026 | X1 | 1502 | 0.406 | 0.342 | 0.608 | 0.260 | 0.200 | 0.644 |
 | C | 42 | X1 | 1502 | 0.448 | 0.347 | 0.670 | 0.255 | 0.200 | 0.644 |
@@ -136,7 +145,39 @@ Localization measures spatial alignment with released lesion masks, not clinical
 
 ## Statistical comparisons
 
-_Statistics not computed._
+| endpoint | subset | family | comparison | arm_a_mean | arm_b_mean | difference | ci_low | ci_high | p_raw | p_holm | effect_size_dz | n_groups | wilcoxon_p_raw (per-group accuracy) | wilcoxon_p_holm (per-group accuracy) | wilcoxon_n_groups |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| paired_psnr | held_out_pairs | planned | B-hairy input | 35.732 | 22.127 | 13.604 | 13.261 | 13.943 | 0.000 | 0.000 | 5.759 | 186 | 0.000 | 0.000 | 186 |
+| paired_psnr | held_out_pairs | planned | C-B | 14.292 | 35.732 | -21.441 | -21.768 | -21.106 | 0.000 | 0.000 | -9.391 | 186 | 0.000 | 0.000 | 186 |
+| paired_psnr | held_out_pairs | planned | C-hairy input | 14.292 | 22.127 | -7.838 | -8.088 | -7.592 | 0.000 | 0.000 | -4.584 | 186 | 0.000 | 0.000 | 186 |
+| paired_ssim | held_out_pairs | planned | B-hairy input | 0.918 | 0.520 | 0.398 | 0.385 | 0.410 | 0.000 | 0.000 | 4.666 | 186 | 0.000 | 0.000 | 186 |
+| paired_ssim | held_out_pairs | planned | C-B | 0.074 | 0.918 | -0.843 | -0.847 | -0.840 | 0.000 | 0.000 | -35.655 | 186 | 0.000 | 0.000 | 186 |
+| paired_ssim | held_out_pairs | planned | C-hairy input | 0.074 | 0.520 | -0.446 | -0.459 | -0.433 | 0.000 | 0.000 | -4.851 | 186 | 0.000 | 0.000 | 186 |
+| test_macro_f1 | full | secondary_control | A-A* | 0.750 | 0.732 | 0.018 | -0.008 | 0.045 | 0.167 | 0.167 | 0.048 | 1437 | 0.074 | 0.074 | 1437 |
+| test_macro_f1 | full | planned | A-B | 0.750 | 0.698 | 0.052 | 0.019 | 0.087 | 0.001 | 0.001 | 0.056 | 1437 | 0.011 | 0.011 | 1437 |
+| test_macro_f1 | full | planned | A-C | 0.750 | 0.426 | 0.324 | 0.283 | 0.366 | 0.000 | 0.000 | 0.469 | 1437 | 0.000 | 0.000 | 1437 |
+| test_macro_f1 | full | planned | B-C | 0.698 | 0.426 | 0.272 | 0.225 | 0.320 | 0.000 | 0.000 | 0.430 | 1437 | 0.000 | 0.000 | 1437 |
+| test_macro_f1 | full | secondary_control | C-A* | 0.426 | 0.732 | -0.306 | -0.348 | -0.265 | 0.000 | 0.000 | -0.456 | 1437 | 0.000 | 0.000 | 1437 |
+| test_macro_f1 | hair_present | secondary_control | A-A* | 0.749 | 0.735 | 0.014 | -0.014 | 0.041 | 0.322 | 0.322 | 0.049 | 1251 | 0.080 | 0.080 | 1251 |
+| test_macro_f1 | hair_present | planned | A-B | 0.749 | 0.691 | 0.058 | 0.022 | 0.095 | 0.001 | 0.001 | 0.066 | 1251 | 0.006 | 0.006 | 1251 |
+| test_macro_f1 | hair_present | planned | A-C | 0.749 | 0.411 | 0.337 | 0.291 | 0.383 | 0.000 | 0.000 | 0.505 | 1251 | 0.000 | 0.000 | 1251 |
+| test_macro_f1 | hair_present | planned | B-C | 0.691 | 0.411 | 0.279 | 0.224 | 0.333 | 0.000 | 0.000 | 0.456 | 1251 | 0.000 | 0.000 | 1251 |
+| test_macro_f1 | hair_present | secondary_control | C-A* | 0.411 | 0.735 | -0.324 | -0.370 | -0.279 | 0.000 | 0.000 | -0.490 | 1251 | 0.000 | 0.000 | 1251 |
+| x1_gradcam_overlap20 | test_x1 | planned | A-B | 0.364 | 0.391 | -0.027 | -0.039 | -0.017 | 0.000 | 0.000 | NaN (undefined) | 1437 | 0.000 | 0.000 | 1437 |
+| x1_gradcam_overlap20 | test_x1 | planned | A-C | 0.364 | 0.417 | -0.053 | -0.065 | -0.040 | 0.000 | 0.000 | NaN (undefined) | 1437 | 0.000 | 0.000 | 1437 |
+| x1_gradcam_overlap20 | test_x1 | planned | B-C | 0.391 | 0.417 | -0.025 | -0.037 | -0.013 | 0.000 | 0.000 | NaN (undefined) | 1437 | 0.000 | 0.000 | 1437 |
+| x1_rollout_overlap20 | test_x1 | planned | A-B | 0.558 | 0.589 | -0.032 | -0.034 | -0.029 | 0.000 | 0.000 | NaN (undefined) | 1437 | 0.000 | 0.000 | 1437 |
+| x1_rollout_overlap20 | test_x1 | planned | A-C | 0.558 | 0.341 | 0.217 | 0.208 | 0.226 | 0.000 | 0.000 | NaN (undefined) | 1437 | 0.000 | 0.000 | 1437 |
+| x1_rollout_overlap20 | test_x1 | planned | B-C | 0.589 | 0.341 | 0.249 | 0.239 | 0.258 | 0.000 | 0.000 | NaN (undefined) | 1437 | 0.000 | 0.000 | 1437 |
+
+
+**Bootstrap.** Paired lesion-group bootstrap, 10,000 replicates, the same resample shared across arms and seeds, percentile 95% CI, two-sided. A difference whose CI spans zero is reported as inconclusive, not as no difference.
+
+**Wilcoxon.** Signed-rank test on one value per lesion group. For the `test_macro_f1` rows the per-group value is that group's mean per-image correctness, so the Wilcoxon test asks whether the two arms differ in per-lesion accuracy; it is not a test of macro-F1 itself. For the image-quality and explainability rows the per-group value is the metric named in the endpoint column.
+
+**Holm families.** The `family` column shows the correction family. The three planned comparisons (A-B, A-C, B-C) form one family per endpoint and subset. A-A* is a secondary resolution control and is corrected in its own family, so it cannot inflate the planned family's correction.
+
+**Subsets.** `full` is the whole test split (1,502 images, 1,437 lesion groups). `hair_present` is the subset where hair removal actually operates (1,316 images, 1,251 groups). `held_out_pairs` is the 186 synthetic pairs. `test_x1` is the explainability cohort.
 
 
 ### Exploratory: released-checkpoint arm
@@ -166,13 +207,13 @@ A significant but negligible effect (|Cohen's dz| < 0.2) is flagged in the CSV's
 ## How the results bear on the three hypotheses
 
 The proposal states three hypotheses. Each is answered below only from the tables above; where the evidence does not settle the question it is called inconclusive rather than resolved either way.
-**H1 (image quality): diffusion removal preserves lesion boundaries and texture better than classical inpainting.** On 0 held-out synthetic pairs, not computed on PSNR, and not computed on SSIM. H1 is not supported by these data. The caveat is material and unresolved: Arm C's output scores below the unprocessed hairy input, and its SSIM is near-constant across all pairs (0.130 +/- 0.010, with 185 of 186 below 0.15). A uniform collapse of that kind is consistent with either an undertrained model or a defect in the inference path, and the two have not been separated. The released checkpoint has not been scored through this adapter, so H1 is best read as untested for DM-AHR rather than as evidence against it.
+**H1 (image quality): diffusion removal preserves lesion boundaries and texture better than classical inpainting.** On 186 held-out synthetic pairs, B higher than C (C - B = -21.441, 95% CI -21.768 to -21.106) on PSNR, and B higher than C (C - B = -0.843, 95% CI -0.847 to -0.840) on SSIM. H1 is not supported by these data. The caveat is material and unresolved: Arm C's output scores below the unprocessed hairy input, and its SSIM is near-constant across all pairs (0.130 +/- 0.010, with 185 of 186 below 0.15). A uniform collapse of that kind is consistent with either an undertrained model or a defect in the inference path, and the two have not been separated. The released checkpoint has not been scored through this adapter, so H1 is best read as untested for DM-AHR rather than as evidence against it.
 
-**H2 (classification): a ViT trained on diffusion-cleaned images outperforms the original and classically cleaned arms.** A vs C: not computed. B vs C: not computed. The direction is opposite to the hypothesis and the gap is large, but the same unresolved caveat applies: Arm C's image quality is anomalous in a way that has not been attributed to training budget or to the inference path. This is a true statement about the model that was run, not a refutation of the published method.
+**H2 (classification): a ViT trained on diffusion-cleaned images outperforms the original and classically cleaned arms.** A vs C: A higher than C (A - C = +0.324, 95% CI +0.283 to +0.366). B vs C: B higher than C (B - C = +0.272, 95% CI +0.225 to +0.320). The direction is opposite to the hypothesis and the gap is large, but the same unresolved caveat applies: Arm C's image quality is anomalous in a way that has not been attributed to training budget or to the inference path. This is a true statement about the model that was run, not a refutation of the published method.
 
-**H3 (explainability): attention and Grad-CAM focus more on lesions after diffusion removal.** H3 is **not supported, and the measurement is uninformative as specified**. Grad-CAM lesion overlap, A vs C: not computed. Attention roll-out lesion overlap, A vs C: not computed. The two methods disagree in direction, but the decisive problem is the baseline: a centred-Gaussian prior scores 0.644 on overlap and 0.953 on the pointing game, exceeding **every arm on both measures**. No arm beats a trivial attend-to-the-centre prior, so the saliency measures do not demonstrate lesion localisation at all, in any arm. This is a property of the measurement, not a finding about diffusion hair removal, and neither measure establishes clinically correct reasoning. A stronger design would use an empirical random-map baseline per image and a saliency method that can beat the centre prior before H3 is testable.
+**H3 (explainability): attention and Grad-CAM focus more on lesions after diffusion removal.** H3 is **not supported, and the measurement is uninformative as specified**. Grad-CAM lesion overlap, A vs C: C higher than A (A - C = -0.053, 95% CI -0.065 to -0.040). Attention roll-out lesion overlap, A vs C: A higher than C (A - C = +0.217, 95% CI +0.208 to +0.226). The two methods disagree in direction, but the decisive problem is the baseline: a centred-Gaussian prior scores 0.644 on overlap and 0.953 on the pointing game, exceeding **every arm on both measures**. No arm beats a trivial attend-to-the-centre prior, so the saliency measures do not demonstrate lesion localisation at all, in any arm. This is a property of the measurement, not a finding about diffusion hair removal, and neither measure establishes clinically correct reasoning. A stronger design would use an empirical random-map baseline per image and a saliency method that can beat the centre prior before H3 is testable.
 
-**Resolution control.** Arm A* isolates the 128 px round-trip that Arm C introduces: A-A* macro-F1 difference not computed. Because that comparison is inconclusive, the resolution change alone does not explain Arm C's large deficit.
+**Resolution control.** Arm A* isolates the 128 px round-trip that Arm C introduces: A-A* macro-F1 difference inconclusive (95% CI for A - A*: -0.008 to +0.045). Because that comparison is inconclusive, the resolution change alone does not explain Arm C's large deficit.
 
 ## Limitations and failure cases
 

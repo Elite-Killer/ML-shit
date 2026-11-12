@@ -280,3 +280,25 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
 - Consequence: the first Creleased evaluation used the wrong transform and was
   discarded and re-run. Only the re-run numbers appear in the report.
 
+## D24 - Two XAI generations were being averaged together
+
+- Finding: `artifacts/logs/` held two sets of explainability CSVs -
+  `xai_localization_<arm>_...` (current `08_xai.py`, with explicit chance
+  baselines) and `xai_localization_v2_<arm>_...` (an earlier diagnostic with
+  different columns). Both matched the `xai_localization_*.csv` glob, so the
+  statistics averaged two different measurements of the same arm. The
+  regenerated report also showed `nan` in the chance columns for three arms.
+- Decision: exclude `_v2_` files from the aggregation in `09_stats.py` and
+  `14_results_report.py`, and regenerate the current-format XAI outputs for
+  A, A*, B and C so every arm is measured by the same code.
+- Reason: an endpoint must come from one measurement, not an average of two.
+  The `_v2_` files are kept on the volume, not deleted.
+- Second defect fixed: the `group_id` backfill only ran when the column was
+  entirely absent. With a mixed file set the column existed but was empty for
+  the older runs, so Arm C silently dropped out of the A-C and B-C
+  comparisons. The backfill now fills per row.
+- Result: XAI endpoints are restored to the values the earlier report carried
+  (A Grad-CAM 0.363 vs 0.350, C 0.412 vs 0.412; A roll-out 0.555 vs 0.557).
+  Conclusions are unchanged: the two saliency methods still disagree, and no
+  arm beats the centred-Gaussian prior (0.644 overlap).
+

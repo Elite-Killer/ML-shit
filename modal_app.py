@@ -418,6 +418,17 @@ def xai_run(arm: str, seed: int):
     return _run("08_xai.py", ["--arm", arm, "--seed", str(seed)])
 
 
+@app.function(image=image, gpu="A100-80GB", timeout=14400, volumes={"/vol": vol})
+def xai_all(arms: str = "A,Astar,B,C"):
+    """Regenerate XAI outputs for every seed of the given arms."""
+    done = []
+    for arm in [a for a in arms.split(",") if a]:
+        for seed in (42, 123, 2026):
+            _run("08_xai.py", ["--arm", arm, "--seed", str(seed)])
+            done.append(f"{arm}/{seed}")
+    return done
+
+
 @app.function(image=image, cpu=8, memory=32768, timeout=7200, volumes={"/vol": vol})
 def stats_run():
     return _run("09_stats.py")
@@ -436,6 +447,11 @@ def acceptance():
 @app.function(image=image, cpu=4, memory=16384, timeout=3600, volumes={"/vol": vol})
 def deliverable_gates():
     return _run("20_deliverable_gates.py")
+
+
+@app.function(image=image, cpu=4, memory=16384, timeout=3600, volumes={"/vol": vol})
+def results_report():
+    return _run("14_results_report.py")
 
 
 @app.function(image=image, cpu=4, memory=16384, timeout=3600, volumes={"/vol": vol})

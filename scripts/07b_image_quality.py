@@ -60,6 +60,8 @@ def score(pred: np.ndarray, ref: np.ndarray, size: int = 128, cfg: dict | None =
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", default="test", choices=["train", "val", "test"])
+    ap.add_argument("--arm", default="C", choices=["C", "Creleased"],
+                    help="which cleaned arm to score; Creleased writes its own output files")
     ap.add_argument("--limit", type=int, default=None)
     args = ap.parse_args()
 
@@ -70,7 +72,7 @@ def main() -> int:
     pairs = pairs[pairs["split"] == args.split]
     if args.limit:
         pairs = pairs.head(args.limit)
-    c_dir = processed_dir("synth") / args.split / "cleaned_C"
+    c_dir = processed_dir("synth") / args.split / f"cleaned_{args.arm}"
 
     rows = []
     with timed("image_quality", log) as t:
@@ -94,31 +96,33 @@ def main() -> int:
             if c_path.exists():
                 c_out = np.array(Image.open(c_path).convert("RGB"))
                 m = score(c_out, ref, cfg=sampling_cfg)
-                row["C_psnr"], row["C_ssim"] = m["psnr"], m["ssim"]
-                row["C_status"] = "ok"
+                row[f"{args.arm}_psnr"], row[f"{args.arm}_ssim"] = m["psnr"], m["ssim"]
+                row[f"{args.arm}_status"] = "ok"
             else:
-                row["C_psnr"] = row["C_ssim"] = float("nan")
-                row["C_status"] = "missing"
+                row[f"{args.arm}_psnr"] = row[f"{args.arm}_ssim"] = float("nan")
+                row[f"{args.arm}_status"] = "missing"
             rows.append(row)
 
         df = pd.DataFrame(rows)
-        out = artifact_dir("logs") / f"paired_psnr_ssim_{args.split}.csv"
+        suffix = "" if args.arm == "C" else f"_{args.arm}"
+        out = artifact_dir("logs") / f"paired_psnr_ssim_{args.split}{suffix}.csv"
         df.to_csv(out, index=False)
 
     summary = {
         "split": args.split,
         "pairs": int(len(df)),
-        "C_scored": int((df["C_status"] == "ok").sum()),
+        f"{args.arm}_scored": int((df[f"{args.arm}_status"] == "ok").sum()),
+        "arm": args.arm,
         "means": {
             col: float(df[col].mean()) for col in
-            ("hairy_input_psnr", "B_psnr", "C_psnr",
-             "hairy_input_ssim", "B_ssim", "C_ssim")
+            ("hairy_input_psnr", "B_psnr", f"{args.arm}_psnr",
+             "hairy_input_ssim", "B_ssim", f"{args.arm}_ssim")
             if col in df and df[col].notna().any()
         },
         "seconds": t["seconds"],
     }
-    save_json(summary, artifact_dir("logs") / f"image_quality_{args.split}.json")
-    record_run("image_quality", gpu=None, seconds=t["seconds"], split=args.split,
+    save_json(summary, artifact_dir("logs") / f"image_quality_{args.split}{suffix}.json")
+    record_run("image_quality", gpu=None, seconds=t["seconds"], split=args.split, arm=args.arm,
                pairs=len(df))
     print(summary)
     return 0

@@ -95,13 +95,20 @@ PYTHONPATH=src pytest tests -q
 
 ## Notebooks and documentation
 
-Two notebooks, both runnable from the repository root:
+Three notebooks, all runnable from the repository root:
 
 - `notebooks/01_results_walkthrough.ipynb` — reads the committed artifacts and explains what was
   done, what the numbers mean and where each one comes from. Needs no GPU, no Modal and no image
   download. Use it to present the study.
-- `notebooks/02_pipeline_reproduction.ipynb` — the full pipeline on Modal, phase by phase, with
-  cost warnings. Modeled on the commands below.
+- `notebooks/02_pipeline_reproduction.ipynb` — the full pipeline on Modal, phase by phase, with cost
+  warnings. Modeled on the commands below.
+- `notebooks/03_local_gpu_pipeline.ipynb` — the same pipeline run **natively** on a local GPU or a
+  Colab GPU, calling `scripts/` directly with `python`. No Modal account, no token. This is the one
+  to use if you want to watch the pipeline execute on your own hardware.
+
+The `scripts/` directory is Modal-free by design: every phase is a plain CLI that reads
+`DATA_ROOT` and `ARTIFACT_ROOT` from the environment. Modal is one way to run them, not a
+requirement.
 
 `docs/CODE_GUIDE.md` is the written companion: repository map, phase-by-phase explanation, a
 traceability table from every reported number to its artifact, the reasoning behind each design

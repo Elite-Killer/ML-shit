@@ -116,10 +116,31 @@ scripts/                 numbered phases, each a plain CLI (argparse) — Modal 
 
 third_party/dmahr/       upstream DM-AHR code, isolated, notices intact
 tests/                   CPU unit tests (28 passing)
-notebooks/               results walkthrough + full reproduction
+notebooks/               results walkthrough, Modal reproduction, native local-GPU run
 reports/                 the written deliverables
 artifacts/               logs, predictions, panels, checkpoints (hashed inventory)
 ```
+
+### Running without Modal
+
+Nothing in `src/` or `scripts/` imports Modal. Each phase is a plain CLI that resolves its paths from
+two environment variables:
+
+```bash
+export DATA_ROOT=/path/to/data
+export ARTIFACT_ROOT=/path/to/artifacts
+python scripts/00_download_data.py
+python scripts/01_audit_and_splits.py
+python scripts/02_hair_pipeline.py
+# ... and so on through 10_finalize.py
+```
+
+Modal is a scheduling convenience, not a dependency. `notebooks/03_local_gpu_pipeline.ipynb` drives
+this path end to end on a local or Colab GPU.
+
+Data preparation phases 1–3 (CPU) were verified natively from a fresh download: they reproduced the
+reference frozen split hash `fda56cf3…`, 7,470 lesion groups, 8,993 hair-present images and 1,022
+synthetic pairs without Modal present.
 
 ---
 

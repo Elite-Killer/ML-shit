@@ -1,0 +1,23 @@
+{
+  "absolute_difference": 0.0,
+  "arm": "A",
+  "command": "modal run --detach modal_app.py::reproduction_check",
+  "device": "cuda",
+  "entrypoint": "scripts/06_train_vit.py --arm A --seed 42 (fresh output dir)",
+  "gate": "G13",
+  "generated_at": "2026-11-12T07:12:50+00:00",
+  "note": "Both runs use the frozen split, the same config and the same torch seed. cuDNN kernel selection is not forced deterministic, so a small difference is expected; the tolerance is stated explicitly.",
+  "recorded": {
+    "best_val_macro_f1": 0.7783361012550677,
+    "epochs_run": 25,
+    "seconds": 389.7
+  },
+  "reproduced": true,
+  "reproduction": {
+    "best_val_macro_f1": 0.7783361012550677,
+    "epochs_run": 25,
+    "seconds": 403.4
+  },
+  "seed": 42,
+  "tolerance": 0.02
+}

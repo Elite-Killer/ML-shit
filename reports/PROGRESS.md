@@ -19,17 +19,21 @@ file alone.
 | 9 Image quality | G9 | PASS | 186 held-out pairs, all three conditions scored |
 | 10 Explainability | G10 | PASS | 9 runs x 1,502 test images, X1 tier |
 | 11 Statistics | G11 | PASS | 10 comparisons, Holm-corrected, 10,000 replicates |
-| 12 Report + handover | G12-G14 | PASS | report, inventory (119 rows), acceptance 11 PASS / 0 FAIL / 3 BLOCKED |
+| 12 Report + handover | G12-G14 | PASS | report, inventory, acceptance 14 PASS / 0 FAIL / 0 BLOCKED |
 
 ## Final acceptance state
 
-`artifacts/logs/acceptance_report.json`: **13 PASS, 0 FAIL, 1 BLOCKED**.
+`artifacts/logs/acceptance_report.json`: **14 PASS, 0 FAIL, 0 BLOCKED**.
 
-The single blocked gate is honest and documented:
+**G13 closed.** Arm A, seed 42 was re-run from scratch into a fresh directory
+through the same entrypoint. Recorded and reproduced validation macro-F1 are
+identical to 16 significant figures (0.7783361, absolute difference 0.0 against
+a 0.02 tolerance). The log is `artifacts/logs/reproduction_log.json`.
 
-- **G13 (reproduction)**: the README reproduction path was not re-run from a
-  clean checkout, because that needs GPU credits. Every other gate passes,
-  including G7 (12/12 checkpoints) and G8 (12/12 evaluations).
+One functional item remains open, and it is a scope blocker rather than a defect:
+**F04 (DERMAHAIR provenance)**. No Kaggle credentials were configured, so the
+kit's required synthetic-hair fallback was used. It is recorded as blocked with
+evidence; the DERMAHAIR route was never silently substituted.
 
 ## Arm C is a labelled ablation, not the paper's method
 

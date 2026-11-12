@@ -435,3 +435,13 @@ def arm_c_pipeline():
         done.append(seed)
     return done
 
+
+@app.function(image=image, gpu="A100-40GB", timeout=7200, volumes={"/vol": vol})
+def reproduction_check():
+    """G13: re-run one recorded ViT arm/seed from scratch and compare.
+
+    Runs seed 42 of arm A into a fresh directory so the recorded result is not
+    disturbed, then writes a reproduction log comparing the two.
+    """
+    return _run("11_reproduction_check.py")
+

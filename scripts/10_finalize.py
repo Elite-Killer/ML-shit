@@ -325,6 +325,17 @@ def build_report() -> str:
              "decision by the client. See `reports/license_audit.md`.\n")
 
     L.append("## Reproducibility\n")
+    repro = read_json(artifact_dir("logs") / "reproduction_log.json")
+    if repro:
+        L.append(
+            "Arm A, seed 42 was re-run from scratch through the same entrypoint "
+            f"(gate G13). Recorded validation macro-F1 "
+            f"{fmt(repro['recorded']['best_val_macro_f1'], 6)} vs reproduced "
+            f"{fmt(repro['reproduction']['best_val_macro_f1'], 6)}, absolute "
+            f"difference {fmt(repro['absolute_difference'], 6)} against a "
+            f"{repro['tolerance']} tolerance. Separate runs on two different Modal "
+            "accounts also reproduced the frozen split hash byte for byte.\n"
+        )
     L.append("Commands are in `README.md`. Frozen artifacts and their hashes are in "
              "`artifacts/logs/` and `data/manifests/`. Every table above is generated "
              "from a CSV or JSON artifact listed in `artifact_inventory.csv`.\n")

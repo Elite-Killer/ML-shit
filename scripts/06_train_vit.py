@@ -25,12 +25,15 @@ def main() -> int:
     ap.add_argument("--arm", required=True, choices=["A", "B", "C", "Astar"])
     ap.add_argument("--seed", required=True, type=int)
     ap.add_argument("--max-epochs", type=int, default=None)
+    ap.add_argument("--run-suffix", default=None,
+                    help="write to <arm>_seed<seed><suffix> instead of resuming the default dir")
     args = ap.parse_args()
 
     cfg = load_config("configs/vit.json")
     splits = pd.read_csv(manifest_dir() / "splits.csv")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    run_dir = artifact_dir("checkpoints", "vit", f"{args.arm}_seed{args.seed}")
+    name = f"{args.arm}_seed{args.seed}{args.run_suffix or ''}"
+    run_dir = artifact_dir("checkpoints", "vit", name)
     result = train_arm(
         arm=args.arm,
         seed=args.seed,

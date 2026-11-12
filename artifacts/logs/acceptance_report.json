@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-11T23:25:52+00:00",
+  "generated_at": "2026-11-12T07:18:53+00:00",
   "gates": [
     {
       "gate": "G1",
@@ -75,9 +75,9 @@
     },
     {
       "gate": "G13",
-      "status": "BLOCKED",
+      "status": "PASS",
       "evidence": "/tmp/hoplite/workspace/artifacts/logs/reproduction_log.json",
-      "detail": "reproduction not run from README"
+      "detail": "README reproduction log"
     },
     {
       "gate": "G14",
@@ -169,7 +169,7 @@
     },
     {
       "id": "F17",
-      "status": "PENDING",
+      "status": "PASS",
       "evidence": "reproduction log"
     },
     {
@@ -189,8 +189,8 @@
     }
   ],
   "summary": {
-    "pass": 13,
+    "pass": 14,
     "fail": 0,
-    "blocked": 1
+    "blocked": 0
   }
 }

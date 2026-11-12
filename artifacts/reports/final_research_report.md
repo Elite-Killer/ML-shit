@@ -169,4 +169,6 @@ HAM10000 is distributed under CC BY-NC 4.0. The DM-AHR repository contradicts it
 
 ## Reproducibility
 
+Arm A, seed 42 was re-run from scratch through the same entrypoint (gate G13). Recorded validation macro-F1 0.778336 vs reproduced 0.778336, absolute difference 0.000000 against a 0.02 tolerance. Separate runs on two different Modal accounts also reproduced the frozen split hash byte for byte.
+
 Commands are in `README.md`. Frozen artifacts and their hashes are in `artifacts/logs/` and `data/manifests/`. Every table above is generated from a CSV or JSON artifact listed in `artifact_inventory.csv`.

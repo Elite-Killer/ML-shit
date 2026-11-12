@@ -71,6 +71,7 @@ def main() -> int:
     if args.limit:
         pairs = pairs.head(args.limit)
     c_dir = processed_dir("synth") / args.split / "cleaned_C"
+    released_dir = processed_dir("synth") / args.split / "cleaned_Creleased"
 
     rows = []
     with timed("image_quality", log) as t:
@@ -99,6 +100,15 @@ def main() -> int:
             else:
                 row["C_psnr"] = row["C_ssim"] = float("nan")
                 row["C_status"] = "missing"
+            rel_path = released_dir / f"{r.image_id}.png"
+            if rel_path.exists():
+                rel_out = np.array(Image.open(rel_path).convert("RGB"))
+                m = score(rel_out, ref, cfg=sampling_cfg)
+                row["Creleased_psnr"], row["Creleased_ssim"] = m["psnr"], m["ssim"]
+                row["Creleased_status"] = "ok"
+            else:
+                row["Creleased_psnr"] = row["Creleased_ssim"] = float("nan")
+                row["Creleased_status"] = "missing"
             rows.append(row)
 
         df = pd.DataFrame(rows)
@@ -109,10 +119,11 @@ def main() -> int:
         "split": args.split,
         "pairs": int(len(df)),
         "C_scored": int((df["C_status"] == "ok").sum()),
+        "Creleased_scored": int((df["Creleased_status"] == "ok").sum()),
         "means": {
             col: float(df[col].mean()) for col in
-            ("hairy_input_psnr", "B_psnr", "C_psnr",
-             "hairy_input_ssim", "B_ssim", "C_ssim")
+            ("hairy_input_psnr", "B_psnr", "C_psnr", "Creleased_psnr",
+             "hairy_input_ssim", "B_ssim", "C_ssim", "Creleased_ssim")
             if col in df and df[col].notna().any()
         },
         "seconds": t["seconds"],

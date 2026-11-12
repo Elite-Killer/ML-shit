@@ -147,6 +147,87 @@ def md_table(df: pd.DataFrame, digits: int = 3) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _row(stats: pd.DataFrame, endpoint: str, comparison: str, subset: str = ""):
+    if stats.empty:
+        return None
+    q = stats[(stats["endpoint"] == endpoint) & (stats["comparison"] == comparison)]
+    if subset:
+        q = q[q["subset"] == subset]
+    if q.empty:
+        return None
+    return q.iloc[0]
+
+
+def _verdict(r) -> str:
+    """Plain-language outcome for one comparison, using the real arm labels.
+
+    `difference` is arm_a minus arm_b, so the sign names the winner directly.
+    """
+    if r is None:
+        return "not computed"
+    lo, hi, d = float(r["ci_low"]), float(r["ci_high"]), float(r["difference"])
+    a, b = str(r["arm_a"]), str(r["arm_b"])
+    if lo <= 0 <= hi:
+        return f"inconclusive (95% CI for {a} - {b}: {lo:+.3f} to {hi:+.3f})"
+    winner, loser = (a, b) if d > 0 else (b, a)
+    return (f"{winner} higher than {loser} by {abs(d):.3f} "
+            f"(95% CI for {a} - {b}: {lo:+.3f} to {hi:+.3f})")
+
+
+def hypothesis_section(stats: pd.DataFrame, summ: pd.DataFrame) -> str:
+    """Map each proposal hypothesis to the measurements that bear on it."""
+    out: list[str] = []
+    out.append("The proposal states three hypotheses. Each is answered below only "
+               "from the tables above; where the evidence does not settle the "
+               "question it is called inconclusive rather than resolved either way.")
+
+    psnr = _row(stats, "paired_psnr", "C-B")
+    ssim = _row(stats, "paired_ssim", "C-B")
+    npairs = int(psnr["n_groups"]) if psnr is not None else 0
+    out.append(
+        "**H1 (image quality): diffusion removal preserves lesion boundaries and "
+        "texture better than classical inpainting.** "
+        f"On {npairs} held-out synthetic pairs, {_verdict(psnr)} on PSNR, and "
+        f"{_verdict(ssim)} on SSIM. H1 is not supported by these data. "
+        "The caveat is material: Arm C ran an undertrained checkpoint at half the "
+        "reference sampling budget, so this measures an under-resourced DM-AHR, not "
+        "DM-AHR as published.")
+    out.append("")
+
+    out.append(
+        "**H2 (classification): a ViT trained on diffusion-cleaned images "
+        "outperforms the original and classically cleaned arms.** "
+        f"A vs C: {_verdict(_row(stats, 'test_macro_f1', 'A-C', 'full'))}. "
+        f"B vs C: {_verdict(_row(stats, 'test_macro_f1', 'B-C', 'full'))}. "
+        "The direction is opposite to the hypothesis and the gap is large, but the "
+        "same undertraining caveat applies, so this is a true statement about the "
+        "model that was run, not a refutation of the published method.")
+    out.append("")
+
+    gradcam_c = _row(stats, "x1_gradcam_overlap20", "A-C")
+    rollout_c = _row(stats, "x1_rollout_overlap20", "A-C")
+    out.append(
+        "**H3 (explainability): attention and Grad-CAM focus more on lesions after "
+        "diffusion removal.** The two salience methods disagree, so the hypothesis "
+        "is only partly supported. Grad-CAM lesion overlap, A vs C: "
+        f"{_verdict(gradcam_c)}. Attention roll-out lesion overlap, A vs C: "
+        f"{_verdict(rollout_c)}. Reporting one of these and not the other would "
+        "overstate the result. Neither measure establishes clinically correct "
+        "reasoning.")
+    out.append("")
+
+    if not summ.empty:
+        full = summ[summ["subset"] == "full"].set_index("arm")
+        if {"A", "Astar"} <= set(full.index):
+            out.append(
+                "**Resolution control.** Arm A* isolates the 128 px round-trip that "
+                "Arm C introduces: A-A* macro-F1 difference "
+                f"{_verdict(_row(stats, 'test_macro_f1', 'A-Astar', 'full'))}. "
+                "Because that comparison is inconclusive, the resolution change "
+                "alone does not explain Arm C's large deficit.")
+    return "\n".join(out)
+
+
 def build_report() -> str:
     protocol = load_config("configs/protocol.json")
     audit = read_json(artifact_dir("logs") / "data_audit.json") or {}
@@ -291,6 +372,9 @@ def build_report() -> str:
         show = stats[["endpoint", "subset", "comparison", "arm_a_mean", "arm_b_mean",
                       "difference", "ci_low", "ci_high", "p_raw", "p_holm",
                       "effect_size_dz", "n_groups"]].copy()
+        for extra in ("wilcoxon_p_raw", "wilcoxon_p_holm", "wilcoxon_n_groups"):
+            if extra in stats.columns:
+                show[extra] = stats[extra]
         L.append(md_table(show))
         L.append("\nTest: paired lesion-group bootstrap, 10,000 replicates, the same "
                  "resample shared across arms and seeds, percentile 95% CI, two-sided. "
@@ -299,6 +383,24 @@ def build_report() -> str:
                  "reported as inconclusive, not as no difference.\n")
     else:
         L.append("_Statistics not computed._\n")
+
+    env = read_json(artifact_dir("logs") / "environment_report.json") or {}
+    L.append("## Compute environment\n")
+    L.append(
+        f"- All GPU work ran on **Modal**, not on Google Colab: "
+        f"{env.get('device', 'n/a')}, Python {env.get('python', 'n/a')}, "
+        f"torch {env.get('torch', 'n/a')}, CUDA {env.get('cuda', 'n/a')}.")
+    L.append("- The proposal names Google Colab as the implementation environment. "
+             "That wording is superseded: the project instructions require all GPU "
+             "jobs to run on Modal, and this study's Arm C sampling budget exceeds "
+             "free-tier Colab limits. Colab was used only to retrieve artifacts. "
+             "See decision log D14.")
+    L.append("- Per-run GPU type and wall-clock are in "
+             "`artifacts/logs/run_registry.jsonl`.")
+    L.append("")
+
+    L.append("## How the results bear on the three hypotheses\n")
+    L.append(hypothesis_section(stats, summ))
 
     L.append("## Limitations and failure cases\n")
     L.append("- DERMAHAIR could not be downloaded (no Kaggle credentials), so the "
@@ -317,6 +419,18 @@ def build_report() -> str:
              "numbers are noisy.\n")
     L.append("- The released DM-AHR weights have undocumented training data and are "
              "used for exploration only.\n")
+    L.append("- Augmentation differs from the proposal's wording: rotation is ±15° "
+             "and uses a resized crop, where the proposal asks for ±90° rotation and "
+             "explicit zoom/shift. The recipe is identical across arms, so the "
+             "comparison stays internally valid, but it is not the stated recipe. "
+             "See decision log D15.\n")
+    L.append("- Class imbalance is handled by inverse-frequency loss weights only. "
+             "The proposal also mentions class-balanced sampling; combining both is "
+             "not recommended, and the dev kit makes weighted loss primary. This is "
+             "recorded in decision log D16 rather than left implicit.\n")
+    L.append("- Arm C was sampled at 1,000 timesteps rather than 2,000 for budget "
+             "reasons (decision log D12). Every per-image row carries its "
+             "`num_timesteps` value so the deviation is auditable.\n")
 
     L.append("## Licence and provenance\n")
     L.append("HAM10000 is distributed under CC BY-NC 4.0. The DM-AHR repository "

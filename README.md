@@ -93,6 +93,20 @@ modal run modal_app.py::finalize
 PYTHONPATH=src pytest tests -q
 ```
 
+## Notebooks and documentation
+
+Two notebooks, both runnable from the repository root:
+
+- `notebooks/01_results_walkthrough.ipynb` — reads the committed artifacts and explains what was
+  done, what the numbers mean and where each one comes from. Needs no GPU, no Modal and no image
+  download. Use it to present the study.
+- `notebooks/02_pipeline_reproduction.ipynb` — the full pipeline on Modal, phase by phase, with
+  cost warnings. Modeled on the commands below.
+
+`docs/CODE_GUIDE.md` is the written companion: repository map, phase-by-phase explanation, a
+traceability table from every reported number to its artifact, the reasoning behind each design
+decision, the list of deviations from the proposal, a glossary and likely supervisor questions.
+
 ## Repository layout
 
 ```

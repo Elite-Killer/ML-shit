@@ -92,3 +92,59 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
   every arm. Implemented in `scripts/05b_fill_c_passthrough.py`; all 1,022
   images filled, giving 10,015 Arm C inputs.
 
+## D14 - Implementation environment: Modal, not Google Colab
+
+- Disagreement: the proposal states four times that the pipeline is
+  "implemented in Python with PyTorch in Google Colab with GPU acceleration",
+  and section 5.2 makes reporting that environment a deliverable. `AGENTS.md`
+  mandates that all GPU work runs on Modal.
+- Decision: run every GPU job on Modal, and state the divergence here and in
+  the report's "Compute environment" section. Record the real versions:
+  Python 3.11.12, torch 2.5.1+cu124, CUDA 12.4, NVIDIA A100-80GB PCIe.
+- Reason: `AGENTS.md` outranks the proposal. The proposal's own workload also
+  does not fit the described environment: Arm C needs 8,993 images at about
+  2.18 s each, roughly 5.4 A100-hours, which exceeds a free Colab session and
+  cannot be relied on with Colab's availability-dependent GPU allocation.
+- Consequence: Colab is used only to retrieve artifacts. It is not the
+  execution environment and the report must not claim otherwise.
+
+## D15 - Augmentation differs from the plus/minus 90 degree rotation proposed
+
+- Finding: the proposal and dev kit specify rotation up to +/-90 degrees and
+  zoom/shift +/-15%. `configs/vit.json` applies `RandomRotation(15)` and
+  `RandomResizedCrop` (scale 0.75-1.0, ratio 0.9-1.11) with no explicit shift.
+- Decision: keep the implemented recipe, which is applied identically to all
+  four arms, and disclose the difference in the report's limitations.
+- Reason: matched arms preserve the internal validity of the comparison, which
+  is what the study measures. Re-running twelve ViT trainings to change
+  augmentation would spend the remaining balance without changing the
+  conclusion about the hair-removal condition. Disclosed rather than hidden.
+
+## D16 - Class balancing uses loss weights only
+
+- Finding: the proposal mentions "class-balanced sampling with loss weighting".
+  The dev kit makes inverse-frequency loss weights primary and warns against
+  combining sampling with weights unless reported as a separate ablation.
+- Decision: use inverse-frequency class weights only, computed from the train
+  split, identical across arms.
+- Reason: the dev kit's guidance replaces the proposal's looser wording.
+  Recorded here because the proposal implies both were used.
+
+## D17 - Wilcoxon tests added; explainability endpoints now enter the table
+
+- Finding: the proposal and dev kit require a Wilcoxon signed-rank test reported
+  beside the bootstrap CI. `wilcoxon_group_paired` existed with unit tests but
+  was never called; `scripts/09_stats.py` hard-coded `wilcoxon_p_raw` to NaN.
+  Separately, the XAI CSVs carried no `group_id`, so `xai_rows()` returned
+  nothing and the two primary explainability endpoints never reached the table.
+- Decision: compute group-aggregated Wilcoxon signed-rank tests for every
+  endpoint, Holm-corrected within the same family as the bootstrap, and write
+  `wilcoxon_p_raw`, `wilcoxon_p_holm`, `wilcoxon_statistic` and
+  `wilcoxon_n_groups`. Values are collapsed to one per lesion group before
+  testing. Add `group_id` to the `scripts/08_xai.py` output, and backfill it in
+  `09_stats.py` from `mask_manifest_x1.csv` for XAI CSVs written before the fix.
+- Verification: the table grew from 14 to 20 rows; all 20 carry a non-NaN
+  Wilcoxon p-value and the two XAI endpoints are present.
+- Reason: both were required deliverables that were silently absent. Computed
+  from existing artifacts on CPU, so no GPU spend is involved.
+

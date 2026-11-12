@@ -113,8 +113,34 @@ See `reports/compute_plan.md`. Headline measured units:
 - **Licences**: HAM10000 is CC BY-NC 4.0; DM-AHR's README (CC BY-NC 4.0) and
   LICENSE (Apache-2.0) contradict each other. Commercial use unresolved.
 
+## Post-delivery alignment pass
+
+The client supplied the proposal (`DM-AHR-ViT_Skin_Lesion_Classification_(2).docx`)
+and asked for the results to be checked against it, plus presentation material for
+a supervisor discussion.
+
+Found and fixed two gaps where a required deliverable was silently absent:
+
+- **Wilcoxon tests were never computed.** `wilcoxon_group_paired` existed and was
+  unit-tested, but `scripts/09_stats.py` hard-coded `wilcoxon_p_raw` to NaN. All
+  endpoints now carry group-aggregated Wilcoxon p-values with Holm correction
+  (decision log D17).
+- **Explainability endpoints never reached the statistics.** The XAI CSVs had no
+  `group_id`, so `xai_rows()` returned nothing. Added at generation and backfilled
+  from `mask_manifest_x1.csv`. The stats table grew from 14 rows / 3 endpoints to
+  20 rows / 5 endpoints.
+
+Also added: a "Compute environment" section (Modal, real versions) and a
+"How the results bear on the three hypotheses" section, both generated from
+artifacts; decision log entries D14-D16 for the Colab, augmentation and
+class-balancing divergences; `docs/CODE_GUIDE.md`; and two notebooks.
+
+Verified: 28 CPU tests pass, notebook 1 executes with zero errors, 14/14 gates
+still pass (G11 now rows=20, endpoints=5).
+
 ## Next step
 
-Wait for Arm C sampling, then train and evaluate the C arm, run XAI and stats,
-and build the final report plus inventory.
+Nothing outstanding. A faithful Arm C requires the full training and sampling
+budget (decision log D1, D12); everything else is reproducible from
+`notebooks/02_pipeline_reproduction.ipynb`.
 

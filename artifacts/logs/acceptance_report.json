@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-12T07:18:53+00:00",
+  "generated_at": "2026-11-12T09:02:37+00:00",
   "gates": [
     {
       "gate": "G1",
@@ -65,7 +65,7 @@
       "gate": "G11",
       "status": "PASS",
       "evidence": "/tmp/hoplite/workspace/artifacts/logs/statistical_comparisons.csv",
-      "detail": "rows=14, endpoints=3"
+      "detail": "rows=20, endpoints=5"
     },
     {
       "gate": "G12",

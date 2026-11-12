@@ -61,6 +61,7 @@ def main() -> int:
     ids = set(test_x1["image_id"])
     mask_paths = dict(zip(test_x1["image_id"], test_x1["mask_path"]))
     dx_of = dict(zip(test_x1["image_id"], test_x1["dx"]))
+    group_of = dict(zip(test_x1["image_id"], test_x1["group_id"]))
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = build_model(pretrained=True).to(device)
@@ -90,6 +91,7 @@ def main() -> int:
                 "seed": args.seed,
                 "tier": args.tier,
                 "image_id": image_id,
+                "group_id": group_of[image_id],
                 "dx": dx_of[image_id],
                 "pred": CLASSES[pred],
                 "correct": bool(CLASSES[pred] == dx_of[image_id]),

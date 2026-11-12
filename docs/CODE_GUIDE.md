@@ -11,7 +11,6 @@ patient care.**
 ---
 
 ## 1. The study in one page
-
 **Question.** Dermoscopy images contain hair that obscures lesion structure. Does removing it with a
 generative (diffusion) model help a Vision Transformer classify skin lesions better than classical
 image-processing hair removal, or than leaving the hair in?
@@ -39,112 +38,123 @@ Nothing here promises that diffusion wins.
 
 ---
 
-## 2. What was actually used
+## 2. The data
+### What the corpus is
 
-| Element | What was used | Where it is recorded |
+HAM10000 is a public dermoscopy collection: **10,015 images** of skin lesions, each with one of
+seven diagnoses, published through the ISIC Archive. The client's collection (ISIC collection 212)
+exposes **11,720** images — the 10,015 labelled ones plus 1,705 that carry no diagnosis in this
+corpus. Only the labelled set is used; the extras are quarantined and cannot enter a split.
+
+### Verified properties, recomputed rather than assumed
+
+| Property | Value | Why it matters |
 |---|---|---|
-| Dataset | ISIC collection 212 — 11,720 images, of which 10,015 are the labelled HAM10000 cohort | `artifacts/logs/data_audit.json` |
-| Lesion masks | Released HAM10000 segmentations (X1 tier), 10,015 available | `data/manifests/mask_manifest_x1.csv` |
-| Classifier | `torchvision` ViT-B/16, ImageNet-1k pretrained, 224 px, 196 patches | `configs/vit.json` |
-| Diffusion model | Upstream DM-AHR (SR3-style) pinned at commit `0aee1bb`, vendored in `third_party/dmahr` | `reports/final_research_report.md` |
-| Classical baseline | Implemented here: multi-orientation black-hat detection + Telea inpainting | `src/dm_ahr_vit/hair/dullrazor.py` |
-| Compute | Modal, NVIDIA A100-80GB PCIe; Python 3.11.12, torch 2.5.1+cu124, CUDA 12.4 | `artifacts/logs/environment_report.json` |
-| Statistics | Lesion-group bootstrap (10,000 reps) and Wilcoxon signed-rank, both Holm-corrected | `artifacts/logs/statistical_comparisons.csv` |
+| Images in collection 212 | 11,720 | the download is complete, paged to exhaustion |
+| Labelled HAM10000 cohort | 10,015 | every reported metric comes from this set |
+| Quarantined extras | 1,705 | unlabelled; excluded from every split |
+| Pixel dimensions | 600 × 450, every image | uniform geometry, so no per-image resize rules needed |
+| Colour mode / encoding | RGB / JPEG | no greyscale or palette images to special-case |
+| Decode status | 11,720 / 11,720 ok | no corrupt or truncated files |
+| Median file size | ~27 KB | consistent with lossy JPEG at this resolution |
+| Lesion groups | 7,470 | the unit of splitting and of every statistic |
+| Diagnoses | 7 classes | `akiec`, `bcc`, `bkl`, `df`, `mel`, `nv`, `vasc` |
 
-**No clinical claim is made or implied anywhere in the code, figures or reports.**
+### The imbalance problem
 
----
+`nv` (melanocytic naevus) is roughly two thirds of the corpus; `df` and `vasc` number in the tens.
+This single fact dictates several later choices: macro-F1 rather than accuracy as the primary
+endpoint, class-weighted loss, and a stratified split so the rare classes keep a non-zero test
+presence. It also means per-class numbers for `df` (17 test images) and `vasc` (21) are noisy and
+must not be read individually.
 
-## 3. Repository map
+### The leakage problem
 
-```
-configs/                 frozen parameters, one file per concern
-  protocol.json          seeds, split fractions, endpoints, planned comparisons, spend cap
-  vit.json               ViT recipe: optimiser, schedule, augmentation, batch size
-  hair_screen.json       hair-detector parameters (frozen before test scoring)
-  dullrazor.json         Arm B parameters
-  dmahr.json             diffusion settings and pinned upstream commit
-  sampling.json          PSNR/SSIM and XAI measurement settings
+HAM10000 contains several photographs of the same lesion, taken in different sessions. If those
+photographs were scattered across training and test, the classifier would be scored on lesions it
+had already seen, and the result would measure memorisation. The corpus therefore has to be split
+by **lesion**, not by image. A dHash sweep proposed 70,062 candidate duplicate pairs; pixel
+confirmation on a common 96×96 grid reduced that to 21 genuine pairs — and all 21 already shared a
+lesion identifier, so grouping equals the metadata's own lesion field (7,470 groups). The check's
+value is that it rules out *unlinked* duplicates, not that it changes the grouping.
 
-src/dm_ahr_vit/          the library — runs on CPU, no Modal import anywhere
-  config.py              config loading and hashing
-  paths.py               DATA_ROOT / ARTIFACT_ROOT resolution for every path
-  utils.py               logging, timing, run registry
-  data/
-    isic.py              ISIC collection download
-    ham10000.py          HAM10000 metadata and mask handling
-    manifest.py          per-image manifest and near-duplicate link table
-    splits.py            group-aware, class-stratified, frozen splits
-    masks.py             lesion-mask loading and resizing
-    synthetic_hair.py    synthetic hairy/hairless pair generation
-    dermahair.py         DERMAHAIR source mapping (blocked: no credentials)
-    dataset.py           torch Dataset and transforms for every arm
-  hair/
-    screening.py         black-hat/top-hat hair-presence detector
-    dullrazor.py         Arm B: morphology + Telea inpainting
-  diffusion/
-    dmahr_adapter.py     adapter around the pinned upstream implementation
-    train.py             leakage-controlled diffusion training loop
-  vit/
-    model.py             ViT-B/16 construction and checkpoint IO
-    train.py             training loop, class weights, early stopping
-    metrics.py           accuracy, per-class recall/specificity, F1, AUC
-  xai/
-    vit_xai.py           Grad-CAM on the patch grid, attention roll-out
-  stats/
-    bootstrap.py         lesion-group bootstrap, Holm, Wilcoxon, Cohen's dz
+### Reference material the study also needs
 
-scripts/                 numbered phases, each a plain CLI (argparse) — Modal is not required
-  00_download_data.py    fetch collection 212
-  01_audit_and_splits.py audit, dedup, freeze split
-  02_hair_pipeline.py    screening, Arm B, synthetic pairs
-  03_dmahr_smoke.py      upstream audit + smoke test
-  03b_dmahr_bench.py     sampling throughput benchmark
-  03c_batch_sweep.py     batch-size sweep
-  04_dmahr_train.py      diffusion training
-  05_dmahr_sample.py     Arm C generation (shardable)
-  05b_fill_c_passthrough.py  copy hair-absent images into Arm C
-  06_train_vit.py        ViT training for one (arm, seed)
-  07_eval_vit.py         locked-test evaluation, per-image predictions
-  07b_image_quality.py   PSNR/SSIM on synthetic pairs
-  08_xai.py              Grad-CAM / attention roll-out vs lesion masks
-  09_stats.py            bootstrap + Wilcoxon + Holm table
-  10_finalize.py         report, figures, artifact inventory
-  11_reproduction_check.py  rerun one configuration and compare
-  12_upload_to_drive.py  copy artifacts to Google Drive
-  check_acceptance.py    the gate checker
+| Resource | Status | Use |
+|---|---|---|
+| HAM10000 lesion masks | available, 10,015 | reference for explanation overlap |
+| Released DM-AHR weights | available (Google Drive) | smoke test only; training data undocumented |
+| Synthetic hairy/hairless pairs | generated here, 1,022 | the only source of a true hairless reference |
+| DERMAHAIR paired data | **blocked** (Kaggle-gated) | would have given real paired references |
+| Lama et al. hair masks | **not obtained** | the proposal's independent screening reference |
 
-third_party/dmahr/       upstream DM-AHR code, isolated, notices intact
-tests/                   CPU unit tests (28 passing)
-notebooks/               results walkthrough, Modal reproduction, native local-GPU run
-reports/                 the written deliverables
-artifacts/               logs, predictions, panels, checkpoints (hashed inventory)
-```
+The last two rows are gaps, not findings. They are recorded as skipped steps in the decision log,
+not described as properties of the data.
 
-### Running without Modal
+## 3. Methodology
+### The question and the three hypotheses
 
-Nothing in `src/` or `scripts/` imports Modal. Each phase is a plain CLI that resolves its paths from
-two environment variables:
+The study asks whether **generative (diffusion) hair removal** helps a skin-lesion classifier more
+than **classical hair removal**, or than leaving the image alone. Three hypotheses were stated
+before any result existed:
 
-```bash
-export DATA_ROOT=/path/to/data
-export ARTIFACT_ROOT=/path/to/artifacts
-python scripts/00_download_data.py
-python scripts/01_audit_and_splits.py
-python scripts/02_hair_pipeline.py
-# ... and so on through 10_finalize.py
-```
+- **H1 (image quality):** diffusion removal preserves lesion boundaries and texture better than
+  classical inpainting. Measured by PSNR and SSIM against a true hairless reference.
+- **H2 (classification):** a ViT trained on diffusion-cleaned images outperforms the original and
+  classically cleaned arms. Measured by macro-F1 on the locked test set.
+- **H3 (explainability):** Grad-CAM and attention maps focus more on the lesion after diffusion
+  removal. Measured by lesion overlap and a pointing game against the released masks.
 
-Modal is a scheduling convenience, not a dependency. `notebooks/03_local_gpu_pipeline.ipynb` drives
-this path end to end on a local or Colab GPU.
+These are hypotheses, not expectations. A null or negative result, honestly reported, is a
+successful outcome.
 
-Data preparation phases 1–3 (CPU) were verified natively from a fresh download: they reproduced the
-reference frozen split hash `fda56cf3…`, 7,470 lesion groups, 8,993 hair-present images and 1,022
-synthetic pairs without Modal present.
+### The experimental design
 
----
+Four input conditions, everything else held identical:
 
-## 4. The pipeline, phase by phase
+| Arm | Input the classifier sees | What it isolates |
+|---|---|---|
+| **A** | the original image | baseline: no hair removal |
+| **B** | DullRazor-style morphological detection + Telea inpainting | classical hair removal |
+| **C** | DM-AHR conditional diffusion inpainting | generative hair removal |
+| **A\*** | the original passed through a 128 px round-trip | Arm C's resolution change, alone |
+
+Arm A\* exists because DM-AHR works natively at 128 px while the ViT expects 224. Without it, a
+drop in Arm C could be blamed on diffusion artefacts when the resolution round-trip alone caused
+it. A\* is the control that makes that separable.
+
+### Why each design choice was made
+
+| Choice | Reason |
+|---|---|
+| Split by lesion, frozen and hashed before training | a split chosen after seeing results cannot be trusted |
+| Cohort limited to the 10,015 labelled images | the extras have no ground truth to score against |
+| Hair threshold frozen before test scoring | otherwise the detector is tuned on the test set |
+| Diffusion model trained here, on train/val sources | the released weights have undocumented training data, so leakage cannot be excluded |
+| Test set scored once per frozen checkpoint | repeated scoring turns the test set into a tuning set |
+| Three seeds (42, 123, 2026) | reduces the chance that one lucky initialisation drives the comparison |
+| Identical recipe across arms | the hair-removal condition must be the only difference |
+
+### How the results are judged
+
+Two tests per endpoint, as the protocol specifies. A **lesion-group bootstrap** resamples whole
+lesions 10,000 times, sharing the same resample across arms and seeds, giving a percentile 95%
+confidence interval. A **Wilcoxon signed-rank** test is run on values collapsed to one per lesion
+group, so the several photographs of one lesion are not counted as independent evidence. Holm
+correction is applied across the three planned comparisons within each endpoint, separately for each
+test. A confidence interval spanning zero is called **inconclusive**, not "no difference".
+
+Effect size matters as much as the p-value: with 1,437 test groups a trivial difference can reach
+significance. Results whose standardised effect is negligible are flagged as such.
+
+## 4. The ML pipeline, phase by phase
+The pipeline has thirteen phases. Each one reads files, writes artifacts and logs what it did, so
+any later number can be recomputed from disk. Phases 1–3 and 12 are CPU work; 4–11 need a GPU.
+
+Three properties hold throughout. Nothing is skipped silently — every excluded image is counted and
+written to a CSV with a reason. Long jobs are resumable, so a preempted container continues rather
+than restarting. And no phase may consume a later phase's output, which is what keeps the test set
+out of every design decision.
 
 Each phase below states **what it does**, **why it is built that way**, and **what it writes**. The
 artifact is the evidence; a phase that writes nothing did not happen.
@@ -270,7 +280,14 @@ PSNR and SSIM for Arm B and Arm C against the synthetic hairless reference, with
 hairy input* scored as a floor.
 
 *Why the floor matters:* a method that scores below the image it was given has actively damaged it.
-Arm C scored below the hairy input, which is how the over-smoothing was detected.
+Arm C scored below the hairy input, which is how the failure was first detected. A follow-up
+diagnosis (`scripts/17_arm_c_diagnose.py`, written up in `reports/arm_c_diagnosis.md`) then
+separated the two possible causes: a hairless reference round-trips through the same inference path
+at PSNR 34.6 / SSIM 0.990, and the released DM-AHR checkpoint reaches PSNR 26.8 / SSIM 0.684
+through it, while the checkpoint trained here reaches 15.0 / 0.079. The adapter is sound; the
+checkpoint is undertrained. Its output is not blurred — it carries far more high-frequency energy
+than the reference with reduced global contrast, which is what a model that has not learned the
+mapping produces.
 
 ### Phase 11 — Explainability (`08_xai.py`)
 
@@ -311,8 +328,172 @@ marked **PENDING** because the dataset is Kaggle-gated and no credentials were a
 
 ---
 
-## 5. Where each reported number comes from
+## 5. What was actually used
+| Element | What was used | Where it is recorded |
+|---|---|---|
+| Dataset | ISIC collection 212 — 11,720 images, of which 10,015 are the labelled HAM10000 cohort | `artifacts/logs/data_audit.json` |
+| Lesion masks | Released HAM10000 segmentations (X1 tier), 10,015 available | `data/manifests/mask_manifest_x1.csv` |
+| Classifier | `torchvision` ViT-B/16, ImageNet-1k pretrained, 224 px, 196 patches | `configs/vit.json` |
+| Diffusion model | Upstream DM-AHR (SR3-style) pinned at commit `0aee1bb`, vendored in `third_party/dmahr` | `reports/final_research_report.md` |
+| Classical baseline | Implemented here: multi-orientation black-hat detection + Telea inpainting | `src/dm_ahr_vit/hair/dullrazor.py` |
+| Compute | Modal, NVIDIA A100-80GB PCIe; Python 3.11.12, torch 2.5.1+cu124, CUDA 12.4 | `artifacts/logs/environment_report.json` |
+| Statistics | Lesion-group bootstrap (10,000 reps) and Wilcoxon signed-rank, both Holm-corrected | `artifacts/logs/statistical_comparisons.csv` |
 
+**No clinical claim is made or implied anywhere in the code, figures or reports.**
+
+---
+
+## 6. Repository map
+```
+configs/                 frozen parameters, one file per concern
+  protocol.json          seeds, split fractions, endpoints, planned comparisons, spend cap
+  vit.json               ViT recipe: optimiser, schedule, augmentation, batch size
+  hair_screen.json       hair-detector parameters (frozen before test scoring)
+  dullrazor.json         Arm B parameters
+  dmahr.json             diffusion settings and pinned upstream commit
+  sampling.json          PSNR/SSIM and XAI measurement settings
+
+src/dm_ahr_vit/          the library — runs on CPU, no Modal import anywhere
+  config.py              config loading and hashing
+  paths.py               DATA_ROOT / ARTIFACT_ROOT resolution for every path
+  utils.py               logging, timing, run registry
+  data/
+    isic.py              ISIC collection download
+    ham10000.py          HAM10000 metadata and mask handling
+    manifest.py          per-image manifest and near-duplicate link table
+    splits.py            group-aware, class-stratified, frozen splits
+    masks.py             lesion-mask loading and resizing
+    synthetic_hair.py    synthetic hairy/hairless pair generation
+    dermahair.py         DERMAHAIR source mapping (blocked: no credentials)
+    dataset.py           torch Dataset and transforms for every arm
+  hair/
+    screening.py         black-hat/top-hat hair-presence detector
+    dullrazor.py         Arm B: morphology + Telea inpainting
+  diffusion/
+    dmahr_adapter.py     adapter around the pinned upstream implementation
+    train.py             leakage-controlled diffusion training loop
+  vit/
+    model.py             ViT-B/16 construction and checkpoint IO
+    train.py             training loop, class weights, early stopping
+    metrics.py           accuracy, per-class recall/specificity, F1, AUC
+  xai/
+    vit_xai.py           Grad-CAM on the patch grid, attention roll-out
+  stats/
+    bootstrap.py         lesion-group bootstrap, Holm, Wilcoxon, Cohen's dz
+
+scripts/                 numbered phases, each a plain CLI (argparse) — Modal is not required
+  00_download_data.py    fetch collection 212
+  01_audit_and_splits.py audit, dedup, freeze split
+  02_hair_pipeline.py    screening, Arm B, synthetic pairs
+  03_dmahr_smoke.py      upstream audit + smoke test
+  03b_dmahr_bench.py     sampling throughput benchmark
+  03c_batch_sweep.py     batch-size sweep
+  04_dmahr_train.py      diffusion training
+  05_dmahr_sample.py     Arm C generation (shardable)
+  05b_fill_c_passthrough.py  copy hair-absent images into Arm C
+  06_train_vit.py        ViT training for one (arm, seed)
+  07_eval_vit.py         locked-test evaluation, per-image predictions
+  07b_image_quality.py   PSNR/SSIM on synthetic pairs
+  08_xai.py              Grad-CAM / attention roll-out vs lesion masks
+  09_stats.py            bootstrap + Wilcoxon + Holm table
+  10_finalize.py         report, figures, artifact inventory
+  11_reproduction_check.py  rerun one configuration and compare
+  12_upload_to_drive.py  copy artifacts to Google Drive
+  check_acceptance.py    the gate checker
+
+third_party/dmahr/       upstream DM-AHR code, isolated, notices intact
+tests/                   CPU unit tests (28 passing)
+notebooks/               results walkthrough, Modal reproduction, native local-GPU run
+reports/                 the written deliverables
+artifacts/               logs, predictions, panels, checkpoints (hashed inventory)
+```
+
+### Running without Modal
+
+Nothing in `src/` or `scripts/` imports Modal. Each phase is a plain CLI that resolves its paths from
+two environment variables:
+
+```bash
+export DATA_ROOT=/path/to/data
+export ARTIFACT_ROOT=/path/to/artifacts
+python scripts/00_download_data.py
+python scripts/01_audit_and_splits.py
+python scripts/02_hair_pipeline.py
+# ... and so on through 10_finalize.py
+```
+
+Modal is a scheduling convenience, not a dependency. `notebooks/03_local_gpu_pipeline.ipynb` drives
+this path end to end on a local or Colab GPU.
+
+Data preparation phases 1–3 (CPU) were verified natively from a fresh download: they reproduced the
+reference frozen split hash `fda56cf3…`, 7,470 lesion groups, 8,993 hair-present images and 1,022
+synthetic pairs without Modal present.
+
+---
+
+## 7. The notebooks, cell by cell
+Three notebooks ship with the repository. Each is annotated: a markdown cell above every code cell
+states what that cell does and why it exists. This section is the written index.
+
+| Notebook | Purpose | Needs |
+|---|---|---|
+| `01_results_walkthrough.ipynb` | reads the committed artifacts and explains the results | CPU only, no Modal, no download |
+| `02_pipeline_reproduction.ipynb` | runs every phase on Modal | Modal token |
+| `03_local_gpu_pipeline.ipynb` | runs every phase natively on a local or Colab GPU | a CUDA GPU, no Modal |
+
+### `01_results_walkthrough.ipynb` — presenting the study
+
+| Cell | What it does |
+|---|---|
+| Setup | resolves the artifact directories and defines JSON-loading helpers |
+| Cohort accounting | rebuilds the headline counts from the audit artifact |
+| Split sizes | prints per-class split counts, showing the stratification worked |
+| Leakage check | independently recomputes that no lesion group spans two splits |
+| Hair screening | reports how many images were marked hair-present |
+| Arm definitions | a reference table of what each arm is |
+| Classification results | macro-F1, accuracy, balanced accuracy and AUC per arm |
+| Result figures | the same numbers as bars with error bars |
+| Per-class detail | where the arms differ by diagnosis |
+| Image quality | PSNR/SSIM against hairless references, with the hairy input as a floor |
+| Explanation metrics | overlap and pointing per arm with both chance baselines |
+| Explanation figure | saliency against the uniform-chance line |
+| Comparison table | every endpoint with both tests and Holm correction |
+| Significance summary | the decision a reader cares about, per comparison |
+| Hypothesis verdicts | maps H1/H2/H3 onto the comparisons that bear on them |
+| Visual panels | the contact sheets written during processing |
+| Acceptance gates | the project's own automated checks |
+
+### `03_local_gpu_pipeline.ipynb` — running it yourself
+
+| Cell | What it does |
+|---|---|
+| Environment check | reports the GPU and torch build before anything assumes one |
+| Dependencies | installs the pinned versions the results were produced with |
+| Get the code | clones the repository and enters it |
+| Where the data lives | sets `DATA_ROOT` and `ARTIFACT_ROOT`; in Colab these point at Drive |
+| Script runner | a wrapper that invokes each phase with those variables set |
+| Download + verify | fetches all 11,720 images and masks, then reads the report back |
+| Audit + split, and verify | rebuilds the frozen split and confirms the counts and leakage check |
+| Hair pipeline | screening, Arm B, Arm A\* and the synthetic pairs |
+| Released checkpoint | fetches the DM-AHR authors' weights, needed for the smoke test |
+| Smoke test | confirms the vendored upstream code runs and a batch round-trips deterministically |
+| Benchmark | measures sampling throughput, to size the Arm C run |
+| Diffusion sanity + training | overfits a few pairs, then trains on train/val sources only |
+| Arm C, one shard | generates one eighth of the images and reports the timing |
+| Arm C, remaining shards | finishes the rest; safe to re-run because finished images are skipped |
+| Arm C, held-out pairs | generates the pairs that make PSNR/SSIM measurable |
+| Passthrough | copies hair-absent images into Arm C, where they are identical |
+| Arm inventory | counts what exists on disk before training |
+| One ViT run, then all | confirms the recipe works, then trains the remaining eleven |
+| Evaluation | scores each frozen checkpoint once on the test set |
+| Image quality, XAI | PSNR/SSIM, then Grad-CAM and attention roll-out with baselines |
+| Statistics, report, gates | the comparison table, generated report, inventory and acceptance check |
+| Outputs | counts the files produced, and how to explore them |
+
+`02_pipeline_reproduction.ipynb` follows the same phases, but each cell shells out to `modal run`.
+It needs no local GPU; the runtime selected in Colab is irrelevant to it.
+
+## 8. Where each reported number comes from
 | Report claim | Source artifact | Field |
 |---|---|---|
 | 11,720 collection images | `data_audit.json` | `collection_total` |
@@ -332,8 +513,7 @@ marked **PENDING** because the dataset is Kaggle-gated and no credentials were a
 
 ---
 
-## 6. Design decisions, and the reason for each
-
+## 9. Design decisions, and the reason for each
 | Decision | Reason |
 |---|---|
 | Quarantine 1,705 extra images | The collection is not the paper's cohort. Mixing them without justification would silently change the study. |
@@ -351,8 +531,7 @@ marked **PENDING** because the dataset is Kaggle-gated and no credentials were a
 
 ---
 
-## 7. Deviations from the proposal
-
+## 10. Deviations from the proposal
 Every one is recorded in `reports/decision_log.md` with its reason. Summary:
 
 | # | Deviation | Status |
@@ -371,8 +550,7 @@ which the source does not claim were dermatologist-traced.
 
 ---
 
-## 8. Glossary for the supervisor conversation
-
+## 11. Glossary
 | Term | Meaning here |
 |---|---|
 | **Macro-F1** | F1 computed per class then averaged, so rare classes count as much as `nv`. The primary endpoint. |
@@ -390,8 +568,7 @@ which the source does not claim were dermatologist-traced.
 
 ---
 
-## 9. Questions a supervisor is likely to ask
-
+## 12. Questions a supervisor is likely to ask
 **"Why is Arm C so much worse? Isn't that just a broken implementation?"**
 Partly a budget problem, and the report says so first: 20,000 training iterations instead of
 660,000, 1,000 sampling steps instead of 2,000, and 128 px upsampled to 224. The smoke test, the
@@ -425,8 +602,7 @@ measured per-unit costs.
 
 ---
 
-## 10. What is deliberately not claimed
-
+## 13. What is deliberately not claimed
 - That diffusion hair removal helps or harms classification in general. The tested model was
   under-resourced.
 - That the explanations show clinically correct reasoning. They show spatial alignment with released

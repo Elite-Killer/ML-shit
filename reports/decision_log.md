@@ -190,3 +190,53 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
   report claims from the artifacts; all pass. The three Word documents were
   regenerated and re-rendered to PDF.
 
+## D19 - Arm C diagnosis: undertrained, not an adapter defect
+
+- Question: Arm C scored PSNR 16.3 against a hairy-input floor of 22.1, with
+  SSIM 0.130 +/- 0.010 and 185 of 186 pairs below 0.15. A near-constant
+  failure of that kind is consistent with either an undertrained model or a
+  defect in the inference path, and the two had not been separated.
+- Method: `scripts/17_arm_c_diagnose.py` runs on validation synthetic pairs
+  only, so no test-set choice depends on it. Three checks: an identity test
+  (hairless reference through the full inference path), a head-to-head between
+  the released checkpoint and ours at both step counts, and defect checks
+  (value range, channel means, spatial alignment, high-frequency energy).
+- Result: **outcome (b), undertrained.** The identity test returns PSNR 34.62 /
+  SSIM 0.990 at 1,000 steps and 41.72 / 0.992 at 2,000. The released checkpoint
+  reaches PSNR 26.80 / SSIM 0.684 (2,000) and 24.66 / 0.641 (1,000), both above
+  the 22.11 floor. Our checkpoint reaches 14.99 / 0.079 and 14.12 / 0.073, both
+  below it. No flip, no offset beyond 1 px, no range or channel error.
+- Consequence 1: the reports' description of Arm C as "over-smoothed" is
+  withdrawn. Our output carries 0.269 mean absolute Laplacian against the
+  reference's 0.018, with global pixel std only falling from 0.166 to 0.127.
+  That is a model that has not learned the mapping, not one that blurs.
+- Consequence 2: Arm C stays a labelled under-resourced ablation. The repair
+  needs $12.85 (ablation budget) to $24.38 (reference settings); the remaining
+  balance is $7.35 after a $1.02 diagnosis, so it does not fit.
+- Consequence 3: H1 and H2 are reported as untested for DM-AHR at a realistic
+  training budget rather than as evidence against the method, because the
+  released weights show this adapter can produce sensible output.
+- Cost and evidence: 29.1 min on A100-40GB, $1.02. See
+  `reports/arm_c_diagnosis.md` and `artifacts/logs/arm_c_*.csv`.
+
+## D20 - H3 reported as not supported and uninformative
+
+- Finding: a centred-Gaussian prior scores 0.644 on lesion overlap and 0.953 on
+  the pointing game, exceeding every arm on both measures. No arm beats a
+  trivial attend-to-the-centre prior.
+- Decision: H3 is reported as **not supported, and the measurement is
+  uninformative as specified**, rather than "partly supported". The distinction
+  matters: "partly supported" would imply the saliency measures carry
+  information about lesion localisation, and they do not.
+- Reason: reporting a direction-of-difference between two methods that both
+  lose to a centre prior would overstate what the data show.
+
+## D21 - Test-set reuse disclosed
+
+- Finding: regenerating Arm C would require scoring the 186 test pairs a second
+  time. The first scoring is void if the inference path is ever repaired.
+- Decision: no repair is affordable, so the test pairs were scored once and the
+  diagnosis used validation pairs only. If a future run repairs Arm C, the
+  first test scoring must be recorded as void in the report rather than
+  presented as an independent second look.
+

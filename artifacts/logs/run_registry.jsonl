@@ -20,15 +20,6 @@
 {"arm": "C", "best_val_f1": 0.4336424045878956, "epochs": 35, "gpu": "NVIDIA A100-SXM4-40GB", "host": "modal", "job": "vit_train", "pid": 1104, "python": "3.11.12", "seconds": 504.3, "seed": 2026, "status": "ok", "timestamp": "2026-11-11T23:14:39+00:00"}
 {"arm": "C", "gpu": "cuda", "host": "modal", "job": "vit_eval", "n_test": 2818, "pid": 1322, "python": "3.11.12", "seconds": 0.0, "seed": 2026, "status": "ok", "timestamp": "2026-11-11T23:14:57+00:00"}
 {"arm": "C", "gpu": "cuda", "host": "modal", "job": "xai", "n": 1502, "pid": 1647, "python": "3.11.12", "seconds": 94.55, "seed": 2026, "status": "ok", "timestamp": "2026-11-11T23:16:39+00:00"}
-{"gpu": null, "host": "modal", "job": "stats", "pid": 45252, "python": "3.12.3", "rows": 14, "seconds": 20.98, "status": "ok", "timestamp": "2026-11-11T23:24:02+00:00"}
-{"gpu": null, "host": "modal", "inventory": 172, "job": "finalize", "pid": 48798, "python": "3.12.3", "seconds": 0.13, "status": "ok", "timestamp": "2026-11-11T23:24:40+00:00"}
-{"gpu": null, "host": "modal", "inventory": 172, "job": "finalize", "pid": 52648, "python": "3.12.3", "seconds": 0.12, "status": "ok", "timestamp": "2026-11-11T23:25:47+00:00"}
-{"gpu": null, "host": "modal", "inventory": 173, "job": "finalize", "pid": 63337, "python": "3.12.3", "seconds": 0.15, "status": "ok", "timestamp": "2026-11-12T07:18:53+00:00"}
-{"gpu": null, "host": "modal", "job": "stats", "pid": 52583, "python": "3.12.3", "rows": 14, "seconds": 27.98, "status": "ok", "timestamp": "2026-11-12T08:36:52+00:00"}
-{"gpu": null, "host": "modal", "job": "stats", "pid": 1452, "python": "3.12.3", "rows": 20, "seconds": 13.87, "status": "ok", "timestamp": "2026-11-12T08:55:40+00:00"}
-{"gpu": null, "host": "modal", "inventory": 173, "job": "finalize", "pid": 5628, "python": "3.12.3", "seconds": 0.16, "status": "ok", "timestamp": "2026-11-12T08:57:33+00:00"}
-{"gpu": null, "host": "modal", "inventory": 173, "job": "finalize", "pid": 7401, "python": "3.12.3", "seconds": 0.14, "status": "ok", "timestamp": "2026-11-12T08:58:43+00:00"}
-{"gpu": null, "host": "modal", "inventory": 173, "job": "finalize", "pid": 8928, "python": "3.12.3", "seconds": 0.13, "status": "ok", "timestamp": "2026-11-12T08:59:07+00:00"}
-{"gpu": null, "host": "modal", "inventory": 176, "job": "finalize", "pid": 44482, "python": "3.12.3", "seconds": 0.18, "status": "ok", "timestamp": "2026-11-12T11:22:33+00:00"}
-{"gpu": null, "host": "modal", "inventory": 176, "job": "finalize", "pid": 48828, "python": "3.12.3", "seconds": 0.14, "status": "ok", "timestamp": "2026-11-12T11:30:34+00:00"}
-{"gpu": null, "host": "modal", "inventory": 176, "job": "finalize", "pid": 53149, "python": "3.12.3", "seconds": 0.19, "status": "ok", "timestamp": "2026-11-12T11:35:00+00:00"}
+{"delta": 0.0, "gpu": "cuda", "host": "modal", "job": "reproduction_check", "pid": 5, "python": "3.11.12", "reproduced": true, "seconds": 407.71, "status": "ok", "timestamp": "2026-11-12T07:12:50+00:00"}
+{"gpu": "cuda", "host": "modal", "identity": 100, "job": "arm_c_diagnose", "outcome": "b", "pairs": 100, "pid": 5, "python": "3.11.12", "seconds": 1744.61, "status": "ok", "timestamp": "2026-11-12T12:28:42+00:00"}
+{"gpu": null, "host": "modal", "inventory": 179, "job": "finalize", "pid": 42656, "python": "3.12.3", "seconds": 0.12, "status": "ok", "timestamp": "2026-11-12T12:32:22+00:00"}

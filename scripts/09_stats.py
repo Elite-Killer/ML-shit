@@ -382,6 +382,11 @@ def main() -> int:
         for subset in ("full", "hair_present"):
             out += classification_endpoint(
                 seeds, subset, reps, bseed, [("A", "Astar")])
+        # Secondary control: C vs A* compares the diffusion arm against the
+        # resolution-matched original, so the 128px round-trip is held constant.
+        for subset in ("full", "hair_present"):
+            out += classification_endpoint(
+                seeds, subset, reps, bseed, [("C", "Astar")])
 
         p = artifact_dir("logs") / "paired_psnr_ssim_test.csv"
         if p.exists():
@@ -419,6 +424,12 @@ def main() -> int:
             "wilcoxon_n_groups", "n_images", "n_groups", "replicates", "test"]
     table = table[[c for c in cols if c in table.columns]]
     table = table.sort_values(["endpoint", "subset", "comparison"])
+    # A clear p-value on a tiny difference is not a meaningful finding. Flag it
+    # so the prose cannot call a negligible effect important.
+    table["negligible"] = (
+        (table["p_holm"] < 0.05)
+        & (table["effect_size_dz"].abs() < 0.2)
+    )
     table.to_csv(artifact_dir("logs") / "statistical_comparisons.csv", index=False)
     save_json({"seconds": t["seconds"], "rows": int(len(table)),
                "endpoints": sorted(table["endpoint"].unique().tolist())},

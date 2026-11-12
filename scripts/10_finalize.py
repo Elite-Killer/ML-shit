@@ -214,16 +214,18 @@ def hypothesis_section(stats: pd.DataFrame, summ: pd.DataFrame) -> str:
     rollout_c = _row(stats, "x1_rollout_overlap20", "A-C")
     out.append(
         "**H3 (explainability): attention and Grad-CAM focus more on lesions after "
-        "diffusion removal.** The two salience methods disagree, so the hypothesis "
-        "is only partly supported. Grad-CAM lesion overlap, A vs C: "
+        "diffusion removal.** H3 is **not supported, and the measurement is "
+        "uninformative as specified**. Grad-CAM lesion overlap, A vs C: "
         f"{_verdict(gradcam_c)}. Attention roll-out lesion overlap, A vs C: "
-        f"{_verdict(rollout_c)}. Reporting one of these and not the other would "
-        "overstate the result. A stronger caveat applies to both: a centred-Gaussian "
-        "prior scores 0.644 on overlap and 0.953 on the pointing game, which exceeds "
-        "every arm on both measures. No arm therefore beats a trivial "
-        "attend-to-the-centre baseline, so these numbers do not establish that any "
-        "arm localises lesions better than a centre prior. Neither measure "
-        "establishes clinically correct reasoning.")
+        f"{_verdict(rollout_c)}. The two methods disagree in direction, but the "
+        "decisive problem is the baseline: a centred-Gaussian prior scores 0.644 on "
+        "overlap and 0.953 on the pointing game, exceeding **every arm on both "
+        "measures**. No arm beats a trivial attend-to-the-centre prior, so the "
+        "saliency measures do not demonstrate lesion localisation at all, in any "
+        "arm. This is a property of the measurement, not a finding about diffusion "
+        "hair removal, and neither measure establishes clinically correct reasoning. "
+        "A stronger design would use an empirical random-map baseline per image and "
+        "a saliency method that can beat the centre prior before H3 is testable.")
     out.append("")
 
     if not summ.empty:
@@ -345,15 +347,21 @@ def build_report() -> str:
              "synthetic pairs. Naturally hairy images are never scored against a "
              "guessed reference.\n")
     if quality.get("C_scored"):
-        L.append("\n**Arm C image quality is poor and this is a real finding, not a "
-                 "scoring artefact.** The leakage-controlled DM-AHR checkpoint was "
-                 "trained for 20,000 iterations, whereas the upstream config specifies "
-                 "660,000. Its outputs are visibly over-smoothed: on the same 186 "
-                 "held-out pairs the output standard deviation collapses relative to "
-                 "the input, so it scores below the unprocessed hairy image. Arm C "
-                 "therefore cannot be read as a fair test of DM-AHR as published; it "
-                 "tests an undertrained model. A faithful Arm C needs the full "
-                 "iteration budget.\n")
+        diag = read_json(artifact_dir("logs") / "arm_c_diagnosis.json") or {}
+        L.append("\n**Arm C image quality is poor, and the cause has been diagnosed.** "
+                 "The leakage-controlled checkpoint was trained for 20,000 iterations "
+                 "where the upstream config specifies 660,000. A diagnosis on "
+                 "validation pairs (see `reports/arm_c_diagnosis.md`) separates the two "
+                 "possible causes: a hairless reference round-trips through the same "
+                 "inference path at PSNR 34.6 / SSIM 0.990, and the released DM-AHR "
+                 "checkpoint reaches PSNR 26.8 / SSIM 0.684 through that path, above "
+                 "the hairy-input floor of 22.1. Our checkpoint reaches PSNR 15.0 / "
+                 "SSIM 0.079, below the floor. The adapter is sound; the checkpoint is "
+                 "undertrained. Its output is not over-smoothed — it carries roughly "
+                 "15x the reference's high-frequency energy with only a modest drop in "
+                 "global contrast, which is the signature of a model that has not "
+                 "learned the mapping rather than one that has learned to blur. Arm C "
+                 "therefore cannot be read as a fair test of DM-AHR as published.\n")
 
     L.append("## Explainability\n")
     xai_files = sorted(artifact_dir("logs").glob("xai_summary_*.json"))

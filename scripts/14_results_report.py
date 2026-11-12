@@ -192,12 +192,16 @@ def build() -> Path:
             f"{quality['C_psnr'].mean():.2f} ± {quality['C_psnr'].std():.2f}",
             f"{quality['C_ssim'].mean():.3f} ± {quality['C_ssim'].std():.3f}"]],
           widths=[1.9, 2.1, 2.1], align_right_from=1)
-    callout(doc, "Why Arm C scores below the untouched input",
-            "The diffusion checkpoint was trained for 20,000 iterations against 660,000 in the "
-            "upstream configuration, and sampled at 1,000 steps instead of 2,000. Its outputs are "
-            "visibly over-smoothed — fine pigment texture is lost. This is a real property of the "
-            "model that was run, and it is labelled an under-resourced ablation throughout, not "
-            "presented as DM-AHR at published settings.",
+    callout(doc, "Why Arm C scores below the untouched input — diagnosed",
+            "A diagnosis on validation pairs separates the two candidate causes. A hairless "
+            "reference round-trips through the same inference path at PSNR 34.6 / SSIM 0.990, and "
+            "the released DM-AHR checkpoint reaches PSNR 26.8 / SSIM 0.684 through that path — "
+            "above the hairy-input floor of 22.1. Our checkpoint reaches PSNR 15.0 / SSIM 0.079, "
+            "below the floor. The adapter is sound; the checkpoint is undertrained. Its output is "
+            "not over-smoothed: it carries roughly 15× the reference's high-frequency energy with "
+            "only a modest drop in global contrast, which is what a model that has not learned the "
+            "mapping looks like. It is labelled an under-resourced ablation throughout and is not "
+            "presented as DM-AHR at published settings. See reports/arm_c_diagnosis.md.",
             fill="FDF3ED", bar="C05A33")
 
     h1(doc, "4. Explainability")
@@ -232,7 +236,7 @@ def build() -> Path:
     fig_dir = artifact_dir("reports") / "preprocessing_assets"
     figure(doc, fig_dir / "dmahr.jpg",
            "Figure 1 — Arm C diffusion removal, from the preprocessing report, reproduced here "
-           "because the same over-smoothing drives both its quality scores and its "
+           "because the same failed hair-removal output drives both its quality scores and its "
            "classification deficit.")
 
     h1(doc, "5. Statistical comparisons")
@@ -278,10 +282,12 @@ def build() -> Path:
     body(doc, "H3 — explainability (attention focuses more on lesions after diffusion): ",
          space_after=2)
     bullet(doc, f"Grad-CAM overlap, A vs C: {verdict(gc)}. Attention roll-out, A vs C: "
-                f"{verdict(ro)}. The two saliency methods disagree, so H3 is only partly "
-                "supported, and reporting one without the other would overstate it. A stronger "
-                "caveat applies: a centred-Gaussian prior beats every arm on both overlap and "
-                "pointing, so no arm demonstrates lesion localisation beyond a centre bias.")
+                f"{verdict(ro)}. The methods disagree in direction, but H3 is not supported and "
+                "the measurement is uninformative as specified: a centred-Gaussian prior beats "
+                "every arm on both overlap (0.644) and pointing (0.953), so no arm demonstrates "
+                "lesion localisation beyond a centre bias. That is a limitation of the "
+                "measurement, not a finding about diffusion hair removal, and it must be fixed "
+                "before H3 can be tested.")
     body(doc, "Resolution control: ", space_after=2)
     bullet(doc, f"A vs A*: {verdict(row(stats, 'test_macro_f1', 'A-Astar', 'full'))}. Because "
                 "this is inconclusive, the 128 px round-trip alone does not explain Arm C's "

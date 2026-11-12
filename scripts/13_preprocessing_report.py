@@ -521,8 +521,11 @@ def build(d: dict) -> Path:
          f"Arm B improves fidelity substantially, consistent with classical inpainting doing what "
          f"it is designed to do on hair-sized structures. Arm C scores below the unprocessed "
          f"input in this run, which is a real result about the model that was tested, not a "
-         f"scoring error: its outputs are visibly over-smoothed and lose structural detail. Arm C "
-         f"in this study was under-resourced — see section 7.", space_after=4)
+         f"scoring error. A diagnosis on validation pairs attributes it to the checkpoint rather "
+         f"than the inference path: the released DM-AHR weights reach PSNR 26.8 / SSIM 0.684 "
+         f"through the same adapter, while the checkpoint trained here reaches 15.0 / 0.079. Its "
+         f"output is noisy and structurally unrelated to the target rather than blurred. Arm C in "
+         f"this study was under-resourced — see section 7.", space_after=4)
 
     # ------------------------------------------------------- 4. visual
     h1(doc, "4. Visual before-and-after")
@@ -566,13 +569,14 @@ def build(d: dict) -> Path:
            "Figure 3 — Arm C, DM-AHR diffusion removal. Input beside the model's output for four "
            "lesions.")
     body(doc,
-         "What is visible: hair is largely suppressed, but the whole image is noticeably softer "
-         "than both the input and the Arm B result. Fine pigment network and lesion-edge "
-         "texture are reduced, and on the heaviest case faint hair remnants persist. This "
-         "matches the measured PSNR and SSIM, and it is the direct visual evidence behind the "
-         "report's statement that Arm C is over-smoothed. It is a finding about the specific "
-         "checkpoint trained for this study, which was trained far below the reference budget — "
-         "not evidence that diffusion hair removal cannot work.")
+         "What is visible: hair is largely suppressed, but the result is degraded in a way that "
+         "is not simple blurring — the lesion loses definition and the surface takes on a "
+         "mottled, low-contrast appearance, and on the heaviest case faint hair remnants "
+         "persist. This matches the measured PSNR and SSIM, and the diagnosis confirms the "
+         "cause: the output carries far more high-frequency energy than the reference while its "
+         "global contrast falls, which is what a model that has not learned the mapping produces. "
+         "It is a finding about the specific checkpoint trained for this study, which was trained "
+         "far below the reference budget — not evidence that diffusion hair removal cannot work.")
 
     # ------------------------------------------------------- 5. effects
     h1(doc, "5. What cleaning changed and what it cost")
@@ -642,7 +646,7 @@ def build(d: dict) -> Path:
     h1(doc, "7. Limitations")
     bullet(doc, "the Lama et al. manually annotated hair masks specified by the proposal were not obtained, so the detector's accuracy on real hair is unverified. Behaviour on synthetic pairs is not evidence about real hair.", "Hair screening is unvalidated — ")
     bullet(doc, "the fix is pixel-level interpolation, so lesion texture under removed hair is not recovered, only approximated.", "Classical removal destroys texture — ")
-    bullet(doc, "the checkpoint was trained well below the reference iteration budget and sampled at half the reference steps. Its over-smoothing is a property of that under-resourced model, not proof about the published method.", "Arm C is under-resourced — ")
+    bullet(doc, "the checkpoint was trained well below the reference iteration budget and sampled at half the reference steps. A diagnosis on validation pairs shows the inference path is sound and the released weights work through it, so the failure is the checkpoint, not the adapter. That is a property of this under-resourced model, not proof about the published method.", "Arm C is under-resourced — ")
     bullet(doc, "synthetic hair is a proxy for real hair. It gives a true reference image, which real hair cannot, but its appearance differs from genuine terminal hair.", "Synthetic pairs are a proxy — ")
     bullet(doc, "the HAM10000 segmentations were created by a single dermatologist (Tschandl P), network-initialised and then verified, corrected or replaced by hand in FIJI (Tschandl et al., Nature Medicine 2020). They are dermatologist-produced but single-rater, with no inter-rater agreement available, so they are one tracing rather than consensus ground truth.", "Lesion masks are single-rater — ")
     bullet(doc, "HAM10000 is CC BY-NC 4.0, and the DM-AHR repository's README and LICENSE disagree (CC BY-NC 4.0 against Apache-2.0). Commercial use is unresolved and needs a rights decision.", "Licensing is unresolved — ")

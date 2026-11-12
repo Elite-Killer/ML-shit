@@ -381,6 +381,15 @@ def vit_eval(arm: str, seed: int):
     return _run("07_eval_vit.py", ["--arm", arm, "--seed", str(seed)])
 
 
+@app.function(image=image, gpu="A100-80GB", timeout=7200, volumes={"/vol": vol})
+def vit_eval_repro(arm: str = "A", seed: int = 42):
+    """Re-evaluate into a scratch artifact root, then diff against the recorded run."""
+    repro_root = "/vol/artifacts/repro_check"
+    _run("07_eval_vit.py", ["--arm", arm, "--seed", str(seed),
+                            "--out-dir", os.path.join(repro_root, "predictions")])
+    return _run("21_verify_reconstruction.py", ["--arm", arm, "--seed", str(seed)])
+
+
 @app.function(image=image, cpu=8, memory=32768, timeout=7200, volumes={"/vol": vol})
 def image_quality(split: str = "test"):
     return _run("07b_image_quality.py", ["--split", split])

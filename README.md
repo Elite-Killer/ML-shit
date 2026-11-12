@@ -129,3 +129,67 @@ modal volume get dmahr-vit-vol /data/manifests local_manifests/
   configured here, so the required synthetic-hair fallback is used and the
   DERMAHAIR route is recorded as blocked.
 
+## Moving artifacts to Google Drive (cloud to cloud)
+
+`modal_app.py::upload_to_drive` streams the volume straight to Drive with
+rclone, so nothing transits your machine. Egress is free within Modal's 1 TiB
+monthly allowance; the job itself is a few cents of CPU.
+
+### One-time credentials
+
+Pick **one** of these.
+
+**OAuth as yourself (recommended for personal Gmail).** Service accounts often
+fail on personal accounts with "Service Accounts do not have storage quota".
+
+```bash
+# On a machine with a browser:
+rclone config create gdrive drive scope=drive
+# then read the token rclone printed and store it as a secret
+modal secret create gdrive-sa GDRIVE_TOKEN='{"access_token":"...","token_type":"Bearer","refresh_token":"...","expiry":"..."}'
+```
+
+**Service account (use with a Workspace Shared Drive).**
+
+1. Create a service account in Google Cloud Console and download its JSON key.
+2. Create the destination folder in Drive and share it with the service
+   account's `client_email`, granting Editor.
+3. Store the key:
+
+```bash
+modal secret create gdrive-sa GDRIVE_SA_JSON="$(cat service-account.json)"
+```
+
+### Upload
+
+```bash
+# always verify first: lists what would move, transfers nothing
+modal run modal_app.py::upload_to_drive --tier results --dry-run
+
+modal run --detach modal_app.py::upload_to_drive --tier results     # ~9 MB
+modal run --detach modal_app.py::upload_to_drive --tier checkpoints # ~43 GB
+modal run --detach modal_app.py::upload_to_drive --tier all
+```
+
+`--dest` sets the Drive folder (default `dmahr-vit`). Each run writes
+`artifacts/logs/drive_upload_<tier>.json` with a per-path status record.
+
+### Free alternative: Colab as the bridge
+
+Needs no Google Cloud project and no Modal credits:
+
+```python
+from google.colab import drive
+drive.mount('/content/drive')
+
+!pip install -q modal
+import os
+os.environ['MODAL_TOKEN_ID'] = 'ak-...'
+os.environ['MODAL_TOKEN_SECRET'] = 'as-...'
+
+!modal volume get dmahr-vit-vol /artifacts/logs /content/drive/MyDrive/dmahr/
+```
+
+Note the destination-directory quirk: pass an existing **parent** directory and
+Modal appends the remote's last path segment.
+

@@ -445,3 +445,53 @@ def reproduction_check():
     """
     return _run("11_reproduction_check.py")
 
+
+# Separate image: rclone must be installed before the local-file mounts, which
+# Modal requires to come last in the build chain.
+drive_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("curl", "ca-certificates", "unzip")
+    .run_commands(
+        "curl -fsSL https://downloads.rclone.org/rclone-current-linux-amd64.zip "
+        "-o /tmp/rclone.zip",
+        "unzip -q /tmp/rclone.zip -d /tmp",
+        "install -m 755 /tmp/rclone-*/rclone /usr/local/bin/rclone",
+        "rclone version",
+    )
+    .pip_install("modal==1.6.3", "numpy==1.26.4", "pandas==2.2.3")
+    .env(
+        {
+            "DATA_ROOT": "/vol/data",
+            "ARTIFACT_ROOT": "/vol/artifacts",
+            "PYTHONPATH": f"{REMOTE_ROOT}/src",
+            "PYTHONUNBUFFERED": "1",
+        }
+    )
+    .add_local_dir("src", f"{REMOTE_ROOT}/src")
+    .add_local_dir("scripts", f"{REMOTE_ROOT}/scripts")
+)
+
+
+@app.function(
+    image=drive_image,
+    cpu=4,
+    memory=8192,
+    timeout=21600,
+    volumes={"/vol": vol},
+    # Create this once with the service-account JSON:
+    #   modal secret create gdrive-sa GDRIVE_SA_JSON="$(cat sa.json)"
+    secrets=[modal.Secret.from_name("gdrive-sa")],
+)
+def upload_to_drive(tier: str = "results", dest: str = "dmahr-vit", dry_run: bool = False):
+    """Stream volume artifacts to Google Drive (cloud to cloud)."""
+    args = ["--tier", tier, "--dest", dest]
+    if dry_run:
+        args.append("--dry-run")
+    return _run("12_upload_to_drive.py", args)
+
+
+@app.local_entrypoint()
+def drive_smoke():
+    """Verify the Drive remote works before moving 40 GB."""
+    print(upload_to_drive.remote("results", "dmahr-vit-smoke", True), flush=True)
+

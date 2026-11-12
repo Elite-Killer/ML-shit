@@ -3,7 +3,7 @@
 Does diffusion-based hair removal (DM-AHR) change dermoscopic classification or
 explanation quality compared with a classical DullRazor-style baseline?
 
-Three input arms on HAM10000 with a frozen, lesion-grouped split:
+Five input arms on HAM10000 with a frozen, lesion-grouped split:
 
 | Arm | Input |
 |---|---|
@@ -11,10 +11,22 @@ Three input arms on HAM10000 with a frozen, lesion-grouped split:
 | B | DullRazor-style morphology + Telea inpainting |
 | C | DM-AHR diffusion hair removal |
 | A* | original at 128px, controlling DM-AHR's resolution change |
+| Creleased | the authors' released DM-AHR checkpoint, 25-step respaced sampling (exploratory) |
+
+Arm C is our own diffusion run at 20,000 iterations and is a labelled
+under-resourced ablation. Creleased runs the released weights through the same
+pipeline, so it is the fair test of the published method; it was added after the
+protocol was frozen and is reported as exploratory. See
+`reports/decision_log.md` (D1, D12, D22).
 
 ImageNet-pretrained ViT-B/16, seven classes, seeds 42/123/2026, plus paired
 PSNR/SSIM on held-out synthetic pairs and Grad-CAM / attention-rollout
 localization against released lesion masks.
+
+Start with `AGENTS.md` (project rules), `docs/CODE_GUIDE.md` (how the code
+fits together), `reports/final_research_report.md` (results) and
+`reports/decision_log.md` (every deviation and why). The client's proposal is
+at `docs/proposal.docx`.
 
 **Research prototype only. Not clinically validated. Not for diagnosis or
 patient care.**

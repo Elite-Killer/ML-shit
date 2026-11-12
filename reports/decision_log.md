@@ -148,3 +148,45 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
 - Reason: both were required deliverables that were silently absent. Computed
   from existing artifacts on CPU, so no GPU spend is involved.
 
+## D18 - External review corrections to the reports
+
+- Finding: two independent reviews of the results documents surfaced four
+  claims that the artifacts do not support. Each was checked against the
+  source before being changed.
+- Corrections:
+  1. **Mask provenance.** The report said the source "does not state they were
+     expert-traced". The Harvard Dataverse record for doi:10.7910/DVN/DBW86T
+     states that a single dermatologist (Tschandl P) created binary masks for
+     all 10,015 images, network-initialised and then verified, corrected or
+     replaced by hand in FIJI (Tschandl et al., Nature Medicine 2020). The
+     report now describes them as single-rater and dermatologist-corrected,
+     and notes that no inter-rater agreement exists.
+  2. **Duplicate merge was credited as leakage control.** All 21
+     pixel-confirmed pairs already shared a `lesion_id`, so the merge changed
+     no grouping: 7,470 groups equals the unique `lesion_id` count. The step is
+     now described as verifying that no unlinked duplicates exist, not as
+     extending the grouping.
+  3. **Centre prior beats every arm.** A centred-Gaussian baseline scores
+     0.644 on overlap and 0.953 on the pointing game, exceeding every arm on
+     both. The report previously said it explained "part of that margin"; it
+     now states that no arm beats a trivial attend-to-the-centre prior, so the
+     explainability numbers do not establish lesion localisation.
+  4. **Wilcoxon mislabelled.** The test uses per-group mean correctness for the
+     classification endpoint, so it measures per-lesion accuracy, not
+     macro-F1. Columns are relabelled and the test is described explicitly.
+     The Holm family column and the four analysis subsets are now visible in
+     the table, and A* is rendered as `A*` rather than `Astar`.
+- Also corrected: the 660,000-iteration figure now cites its source
+  (`third_party/dmahr/config/akiec.json` `n_iter`, commit `0aee1bb`, consistent
+  with the released checkpoint name `I725000_E1083`), and the Lama et al. hair
+  masks are described as a skipped validation step rather than as annotations
+  that do not exist.
+- Not changed: Arm C's verdict. A reviewer proposed "failed reproduction,
+  H1-H3 untested" as an alternative to "did not help". The reports now say the
+  two possible causes (training budget, inference path) have not been
+  separated and that the released checkpoint was never scored through this
+  adapter, which is a stronger statement than either label.
+- Verification: `scripts/16_verify_report_claims.py` recomputes all 42
+  report claims from the artifacts; all pass. The three Word documents were
+  regenerated and re-rendered to PDF.
+

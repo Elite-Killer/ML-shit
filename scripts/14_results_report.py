@@ -35,12 +35,13 @@ def verdict(r) -> str:
     if r is None:
         return "not computed"
     d, lo, hi = float(r["difference"]), float(r["ci_low"]), float(r["ci_high"])
-    a, b = str(r["arm_a"]), str(r["arm_b"])
+    a = str(r["arm_a"]).replace("Astar", "A*")
+    b = str(r["arm_b"]).replace("Astar", "A*")
     if lo <= 0 <= hi:
-        return f"inconclusive (95% CI {lo:+.3f} to {hi:+.3f})"
+        return f"inconclusive ({a} - {b} 95% CI {lo:+.3f} to {hi:+.3f})"
     w = a if d > 0 else b
     l = b if d > 0 else a
-    return f"{w} higher than {l} by {abs(d):.3f} (95% CI {lo:+.3f} to {hi:+.3f})"
+    return f"{w} higher than {l} ({a} - {b} = {d:+.3f}, 95% CI {lo:+.3f} to {hi:+.3f})"
 
 
 def row(stats, endpoint, comparison, subset=None):
@@ -219,8 +220,14 @@ def build() -> Path:
           widths=[1.75, 0.95, 0.95, 0.95, 0.9, 0.85, 0.9], align_right_from=1)
     body(doc,
          "Overlap measures spatial alignment with released masks, not clinically correct "
-         "reasoning. Every arm beats the uniform-chance baseline, and the centred-Gaussian "
-         "baseline shows part of that margin comes simply from attending the image centre.",
+         "reasoning. Every arm beats uniform chance, but a centred-Gaussian prior scores "
+         "0.644 on overlap and 0.953 on the pointing game, exceeding every arm on both "
+         "measures. No arm therefore beats a trivial attend-to-the-centre baseline, and "
+         "these numbers do not establish that any arm localises lesions better than that "
+         "prior. The masks themselves are single-rater: a dermatologist (Tschandl P) "
+         "created binary masks for all 10,015 images, network-initialised and then "
+         "verified, corrected or replaced by hand in FIJI (Tschandl et al., Nature "
+         "Medicine 2020), so overlap is measured against one tracing, not consensus.",
          size=9.5, italic=True)
     fig_dir = artifact_dir("reports") / "preprocessing_assets"
     figure(doc, fig_dir / "dmahr.jpg",
@@ -232,10 +239,14 @@ def build() -> Path:
     body(doc,
          "Every endpoint is tested twice, as the protocol requires: a lesion-group bootstrap "
          "(10,000 replicates, the same resample shared across arms and seeds, percentile 95% CI) "
-         "and a Wilcoxon signed-rank test on values collapsed to one per lesion group. Holm "
-         "correction is applied across the three planned comparisons within each endpoint, "
-         "separately for each test. A CI spanning zero is called inconclusive, not 'no "
-         "difference'.")
+         "and a Wilcoxon signed-rank test on values collapsed to one per lesion group. "
+         "For the classification endpoint the per-group value is that group's mean "
+         "per-image correctness, so the Wilcoxon test asks whether the arms differ in "
+         "per-lesion accuracy — it is not a test of macro-F1 itself, and the column "
+         "header says so. Holm correction is applied across the three planned "
+         "comparisons within each endpoint, separately for each test; A–A* is a "
+         "secondary control in its own family and cannot inflate the planned family. "
+         "A CI spanning zero is called inconclusive, not 'no difference'.")
     rows = []
     for r in stats.itertuples():
         rows.append([r.endpoint, r.comparison, f"{r.difference:+.3f}",
@@ -244,7 +255,7 @@ def build() -> Path:
                      f"{r.wilcoxon_p_holm:.4f}" if r.wilcoxon_p_holm >= 0.0001 else "<0.0001",
                      f"{r.n_groups}"])
     table(doc, ["Endpoint", "Comparison", "Diff.", "95% CI (bootstrap)",
-                 "p (Holm)", "Wilcoxon p (Holm)", "Groups"],
+                 "p (Holm)", "Wilcoxon p (per-group acc.)", "Groups"],
           rows, widths=[1.35, 0.95, 0.6, 1.25, 0.72, 0.9, 0.55], font=8, align_right_from=2)
 
     h1(doc, "6. What this says about the three hypotheses")
@@ -255,7 +266,11 @@ def build() -> Path:
     body(doc, "H1 — image quality (diffusion preserves texture better than classical): ",
          space_after=2)
     bullet(doc, f"PSNR: {verdict(psnr)}. SSIM: {verdict(ssim)}. H1 is not supported by these "
-                "data, with the under-resourced caveat applying throughout.")
+                "data. The caveat is unresolved, not merely a budget note: Arm C's SSIM is "
+                "near-constant across all 186 pairs (0.130 ± 0.010, with 185 below 0.15), which "
+                "fits either an undertrained model or a defect in the inference path. The "
+                "released checkpoint has not been scored through this adapter, so H1 is best "
+                "read as untested for DM-AHR rather than as evidence against it.")
     body(doc, "H2 — classification (diffusion-cleaned images improve the ViT): ", space_after=2)
     bullet(doc, f"A vs C: {verdict(row(stats, 'test_macro_f1', 'A-C', 'full'))}. "
                 f"B vs C: {verdict(row(stats, 'test_macro_f1', 'B-C', 'full'))}. The direction is "
@@ -264,7 +279,9 @@ def build() -> Path:
          space_after=2)
     bullet(doc, f"Grad-CAM overlap, A vs C: {verdict(gc)}. Attention roll-out, A vs C: "
                 f"{verdict(ro)}. The two saliency methods disagree, so H3 is only partly "
-                "supported, and reporting one without the other would overstate it.")
+                "supported, and reporting one without the other would overstate it. A stronger "
+                "caveat applies: a centred-Gaussian prior beats every arm on both overlap and "
+                "pointing, so no arm demonstrates lesion localisation beyond a centre bias.")
     body(doc, "Resolution control: ", space_after=2)
     bullet(doc, f"A vs A*: {verdict(row(stats, 'test_macro_f1', 'A-Astar', 'full'))}. Because "
                 "this is inconclusive, the 128 px round-trip alone does not explain Arm C's "
@@ -272,20 +289,27 @@ def build() -> Path:
 
     h1(doc, "7. Limitations")
     for lead, txt in [
-        ("Arm C is under-resourced — ",
-         "20,000 training iterations against 660,000 upstream, 1,000 sampling steps against "
-         "2,000, and 128 px upsampled to 224. Its results describe that model, not the published "
-         "method."),
+        ("Arm C is undiagnosed as well as under-resourced — ",
+         "It ran 20,000 training iterations (the upstream config's n_iter is 660,000 and the "
+         "released checkpoint is named I725000_E1083), 1,000 sampling steps against 2,000, and "
+         "128 px upsampled to 224. Its output scores below the unprocessed input with "
+         "near-constant SSIM, which has not been attributed to budget or to the inference path. "
+         "Its results describe that model, not the published method."),
         ("Three seeds — ",
          "inference is over ~1,437 lesion groups with seeds averaged inside each replicate, "
          "never counted as independent samples; still, three seeds cannot characterise variance "
          "exhaustively."),
         ("Screening unvalidated — ",
-         "no independent hair annotations exist; the detector was calibrated on synthetic pairs "
-         "and frozen. 89.8% screening prevalence is reported as a limitation, not hidden."),
-        ("Masks are not expert ground truth — ",
-         "the released HAM10000 segmentations are not documented as dermatologist-traced, so "
-         "explanation overlap is alignment with those maps, not clinical correctness."),
+         "the proposal specifies the manually annotated hair masks of Lama et al. (ChimeraNet) "
+         "as an independent reference for screening quality, and those masks were not obtained. "
+         "This is a skipped step, not a gap in the data. The threshold was calibrated on "
+         "synthetic pairs and frozen, which protects the test set but does not validate the "
+         "detector on real hair. The 89.8% screening prevalence is reported as a limitation."),
+        ("Masks are single-rater — ",
+         "the HAM10000 segmentations were created by one dermatologist (Tschandl P), "
+         "network-initialised and then verified, corrected or replaced by hand in FIJI "
+         "(Tschandl et al., Nature Medicine 2020). No inter-rater agreement is available, so "
+         "explanation overlap is measured against one tracing."),
         ("Single corpus — ",
          "one public dataset; nothing here establishes behaviour on other scanners or "
          "populations."),

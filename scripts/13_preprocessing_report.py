@@ -250,11 +250,19 @@ def collect() -> dict:
     expected = dict(provided)
     observed = splits["dx"].value_counts().to_dict()
 
+    # Confirmed duplicate pairs only reinforce grouping if the two images were not
+    # already the same lesion. Measure it rather than assume it.
+    lesion_of = dict(zip(splits["image_id"], splits["lesion_id"]))
+    confirmed = neardup[neardup["confirmed"]]
+    already_same = sum(1 for a, b in zip(confirmed["id_a"], confirmed["id_b"])
+                       if lesion_of.get(a) == lesion_of.get(b))
+
     return {
         "m": m, "c0": c0, "extra": extra, "splits": splits, "hair": hair,
         "pairs": pairs, "quality": quality,
         "near_total": len(neardup),
         "near_confirmed": int(neardup["confirmed"].sum()),
+        "near_already_same_lesion": int(already_same),
         "expected": expected, "observed": observed,
     }
 
@@ -411,17 +419,23 @@ def build(d: dict) -> Path:
          f"duplicates would have merged unrelated patients. Each candidate was therefore "
          f"re-checked pixel by pixel on a common 96×96 greyscale grid and kept only if mean "
          f"absolute difference stayed at or below 4/255 and correlation at or above 0.985. "
-         f"{d['near_confirmed']} pairs survived, which is a plausible number for near-duplicate "
-         f"photographs and a defensible basis for merging lesion groups.")
+         f"{d['near_confirmed']} pairs survived. All {d['near_already_same_lesion']} of them "
+         f"already shared a lesion identifier, so this step confirmed that no unseen "
+         f"cross-lesion duplicates existed rather than changing the grouping: the "
+         f"{splits['group_id'].nunique():,} lesion groups equal the unique lesion identifiers "
+         f"in the metadata. The check is still worth having — it is the evidence that grouping "
+         f"by lesion does not miss a duplicate pair the metadata does not link — but it should "
+         f"not be credited as additional leakage control.")
 
     h2(doc, "Why the split is by lesion, not by image")
     body(doc,
          "HAM10000 contains several photographs of the same lesion in different sessions. If "
          "those photographs were scattered across training and test, the model would be asked to "
          "recognise a lesion it had already seen, and the test score would measure memorisation "
-         "rather than generalisation. Splitting at the lesion level — and merging confirmed "
-         "near-duplicates into the same lesion — makes an honest test set. The split is hashed "
-         "and frozen before any model is trained, so it cannot be quietly adjusted afterwards.")
+         "rather than generalisation. Splitting at the lesion level makes an honest test set, "
+         "and the duplicate check above establishes that no unlinked duplicates slipped through. "
+         "The split is hashed and frozen before any model is trained, so it cannot be quietly "
+         "adjusted afterwards.")
 
     h2(doc, "Why the hair threshold is frozen")
     body(doc,
@@ -564,7 +578,8 @@ def build(d: dict) -> Path:
     h1(doc, "5. What cleaning changed and what it cost")
     h2(doc, "5.1 Effects that strengthen the study")
     bullet(doc, "removing 1,705 unlabelled images keeps every reported metric inside the labelled cohort, so no result depends on images with no ground truth.", "Honest cohort — ")
-    bullet(doc, f"merging {d['near_confirmed']} confirmed duplicate pairs and splitting by lesion means one patient's lesion cannot appear in both training and test.", "Leakage control — ")
+    bullet(doc, f"splitting by lesion keeps every photograph of one lesion inside a single partition, so the test set cannot reward memorising a lesion the model already saw.", "Leakage control — ")
+    bullet(doc, f"the {d['near_confirmed']} pixel-confirmed duplicate pairs all already shared a lesion identifier, so this verifies the metadata's grouping rather than extending it.", "Duplicate verification — ")
     bullet(doc, "the frozen split hash and the frozen hair threshold mean the test set could not have influenced any design choice.", "Frozen parameters — ")
     bullet(doc, "all four arms share identical manifests, transforms and seeds; only the hair-removal condition differs.", "Matched arms — ")
     bullet(doc, f"{len(pairs):,} synthetic pairs give a genuine hairless reference, which is what makes PSNR and SSIM meaningful instead of decorative.", "Measurable fidelity — ")
@@ -576,10 +591,11 @@ def build(d: dict) -> Path:
            f"hidden. It means most images are processed, which maximises cost and risk of "
            f"altering images that needed no alteration.", "High screening prevalence — ")
     bullet(doc,
-           "no independent hair annotations exist in this corpus, so the detector's accuracy "
-           "against real hair labels is unverified. It was calibrated on synthetic pairs and "
-           "frozen; that is the strongest available guarantee, and it is not the same as a "
-           "validated detector.", "Screening is not validated — ")
+           "the proposal specifies the manually annotated hair masks of Lama et al. "
+           "(ChimeraNet) as an independent reference for screening quality, and those masks "
+           "were not obtained. This is a skipped validation step, not a gap in the data. The "
+           "detector was calibrated on synthetic pairs and frozen, which protects the test set "
+           "but does not validate it against real hair.", "Screening is not validated — ")
     bullet(doc,
            "the heavy-hair case in Figure 1 shows the mask covering lesion pigment too. "
            "Classical inpainting then fills those pixels, which can smooth lesion structure "
@@ -624,11 +640,11 @@ def build(d: dict) -> Path:
 
     # ------------------------------------------------------- 7. limitations
     h1(doc, "7. Limitations")
-    bullet(doc, "no independent annotations exist, so its accuracy on real hair is unverified. Its behaviour on synthetic pairs is not evidence about real hair.", "Hair screening is unvalidated — ")
+    bullet(doc, "the Lama et al. manually annotated hair masks specified by the proposal were not obtained, so the detector's accuracy on real hair is unverified. Behaviour on synthetic pairs is not evidence about real hair.", "Hair screening is unvalidated — ")
     bullet(doc, "the fix is pixel-level interpolation, so lesion texture under removed hair is not recovered, only approximated.", "Classical removal destroys texture — ")
     bullet(doc, "the checkpoint was trained well below the reference iteration budget and sampled at half the reference steps. Its over-smoothing is a property of that under-resourced model, not proof about the published method.", "Arm C is under-resourced — ")
     bullet(doc, "synthetic hair is a proxy for real hair. It gives a true reference image, which real hair cannot, but its appearance differs from genuine terminal hair.", "Synthetic pairs are a proxy — ")
-    bullet(doc, "segmentations were released with HAM10000, and the source does not state they were dermatologist-traced. They are used as reference masks, not as expert ground truth.", "Lesion masks are released, not expert-verified — ")
+    bullet(doc, "the HAM10000 segmentations were created by a single dermatologist (Tschandl P), network-initialised and then verified, corrected or replaced by hand in FIJI (Tschandl et al., Nature Medicine 2020). They are dermatologist-produced but single-rater, with no inter-rater agreement available, so they are one tracing rather than consensus ground truth.", "Lesion masks are single-rater — ")
     bullet(doc, "HAM10000 is CC BY-NC 4.0, and the DM-AHR repository's README and LICENSE disagree (CC BY-NC 4.0 against Apache-2.0). Commercial use is unresolved and needs a rights decision.", "Licensing is unresolved — ")
     bullet(doc, "the images are a single public corpus from one collection. Nothing here establishes behaviour on another scanner, population or acquisition protocol.", "Single corpus — ")
 

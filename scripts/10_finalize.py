@@ -170,8 +170,8 @@ def _verdict(r) -> str:
     if lo <= 0 <= hi:
         return f"inconclusive (95% CI for {a} - {b}: {lo:+.3f} to {hi:+.3f})"
     winner, loser = (a, b) if d > 0 else (b, a)
-    return (f"{winner} higher than {loser} by {abs(d):.3f} "
-            f"(95% CI for {a} - {b}: {lo:+.3f} to {hi:+.3f})")
+    return (f"{winner} higher than {loser} "
+            f"({a} - {b} = {d:+.3f}, 95% CI {lo:+.3f} to {hi:+.3f})")
 
 
 def hypothesis_section(stats: pd.DataFrame, summ: pd.DataFrame) -> str:
@@ -189,9 +189,13 @@ def hypothesis_section(stats: pd.DataFrame, summ: pd.DataFrame) -> str:
         "texture better than classical inpainting.** "
         f"On {npairs} held-out synthetic pairs, {_verdict(psnr)} on PSNR, and "
         f"{_verdict(ssim)} on SSIM. H1 is not supported by these data. "
-        "The caveat is material: Arm C ran an undertrained checkpoint at half the "
-        "reference sampling budget, so this measures an under-resourced DM-AHR, not "
-        "DM-AHR as published.")
+        "The caveat is material and unresolved: Arm C's output scores below the "
+        "unprocessed hairy input, and its SSIM is near-constant across all pairs "
+        "(0.130 +/- 0.010, with 185 of 186 below 0.15). A uniform collapse of that "
+        "kind is consistent with either an undertrained model or a defect in the "
+        "inference path, and the two have not been separated. The released "
+        "checkpoint has not been scored through this adapter, so H1 is best read as "
+        "untested for DM-AHR rather than as evidence against it.")
     out.append("")
 
     out.append(
@@ -200,8 +204,10 @@ def hypothesis_section(stats: pd.DataFrame, summ: pd.DataFrame) -> str:
         f"A vs C: {_verdict(_row(stats, 'test_macro_f1', 'A-C', 'full'))}. "
         f"B vs C: {_verdict(_row(stats, 'test_macro_f1', 'B-C', 'full'))}. "
         "The direction is opposite to the hypothesis and the gap is large, but the "
-        "same undertraining caveat applies, so this is a true statement about the "
-        "model that was run, not a refutation of the published method.")
+        "same unresolved caveat applies: Arm C's image quality is anomalous in a way "
+        "that has not been attributed to training budget or to the inference path. "
+        "This is a true statement about the model that was run, not a refutation of "
+        "the published method.")
     out.append("")
 
     gradcam_c = _row(stats, "x1_gradcam_overlap20", "A-C")
@@ -212,8 +218,12 @@ def hypothesis_section(stats: pd.DataFrame, summ: pd.DataFrame) -> str:
         "is only partly supported. Grad-CAM lesion overlap, A vs C: "
         f"{_verdict(gradcam_c)}. Attention roll-out lesion overlap, A vs C: "
         f"{_verdict(rollout_c)}. Reporting one of these and not the other would "
-        "overstate the result. Neither measure establishes clinically correct "
-        "reasoning.")
+        "overstate the result. A stronger caveat applies to both: a centred-Gaussian "
+        "prior scores 0.644 on overlap and 0.953 on the pointing game, which exceeds "
+        "every arm on both measures. No arm therefore beats a trivial "
+        "attend-to-the-centre baseline, so these numbers do not establish that any "
+        "arm localises lesions better than a centre prior. Neither measure "
+        "establishes clinically correct reasoning.")
     out.append("")
 
     if not summ.empty:
@@ -222,10 +232,10 @@ def hypothesis_section(stats: pd.DataFrame, summ: pd.DataFrame) -> str:
             out.append(
                 "**Resolution control.** Arm A* isolates the 128 px round-trip that "
                 "Arm C introduces: A-A* macro-F1 difference "
-                f"{_verdict(_row(stats, 'test_macro_f1', 'A-Astar', 'full'))}. "
+                f"{_verdict(_row(stats, 'test_macro_f1', 'A-Astar', 'full')).replace('Astar', 'A*')}. "
                 "Because that comparison is inconclusive, the resolution change "
                 "alone does not explain Arm C's large deficit.")
-    return "\n".join(out)
+    return "\n".join(out) + "\n"
 
 
 def build_report() -> str:
@@ -262,8 +272,10 @@ def build_report() -> str:
     L.append(f"- Collection 212 images: {audit.get('collection_total')}\n"
              f"- Confirmatory C0 images: {audit.get('c0_decoded')}\n"
              f"- Quarantined C0-extra: {audit.get('c0_extra')}\n"
-             f"- Groups after lesion + confirmed near-duplicate merging: "
-             f"{audit.get('groups_total')}\n"
+             f"- Lesion groups: {audit.get('groups_total')}\n"
+             f"- Confirmed near-duplicate pairs: "
+             f"{audit.get('near_duplicates_confirmed')} "
+             f"(all already shared a lesion_id, so grouping is unchanged by them)\n"
              f"- Split sizes: {audit.get('frozen_splits', {}).get('sizes')}\n"
              f"- Split SHA-256: `{audit.get('frozen_splits', {}).get('splits_sha256')}`\n"
              f"- Leakage check: {audit.get('split_verification', {}).get('ok')}\n")
@@ -363,24 +375,50 @@ def build_report() -> str:
     else:
         L.append("_Explainability not computed._\n")
     L.append("\nLocalization measures spatial alignment with released lesion masks, "
-             "not clinically correct reasoning. X1 masks are the released HAM10000 "
-             "segmentations; the source does not state they were expert-traced, so "
-             "they are not described as expert masks.\n")
+             "not clinically correct reasoning. The X1 masks are the HAM10000 "
+             "segmentations released on Harvard Dataverse (doi:10.7910/DVN/DBW86T). "
+             "Their description states that a single dermatologist (Tschandl P) "
+             "created binary masks for all 10,015 images, initialised with a "
+             "segmentation network and then verified, corrected or replaced by hand "
+             "in FIJI (Tschandl et al., Nature Medicine 2020). They are therefore "
+             "single-rater, network-initialised and dermatologist-corrected. They are "
+             "not multi-rater consensus masks, and no inter-rater agreement is "
+             "available, so overlap is reported against one dermatologist's tracing.\n")
 
     L.append("## Statistical comparisons\n")
     if not stats.empty:
-        show = stats[["endpoint", "subset", "comparison", "arm_a_mean", "arm_b_mean",
+        show = stats[["endpoint", "subset", "family", "comparison",
+                      "arm_a_mean", "arm_b_mean",
                       "difference", "ci_low", "ci_high", "p_raw", "p_holm",
                       "effect_size_dz", "n_groups"]].copy()
         for extra in ("wilcoxon_p_raw", "wilcoxon_p_holm", "wilcoxon_n_groups"):
             if extra in stats.columns:
                 show[extra] = stats[extra]
+        show = show.rename(columns={
+            "wilcoxon_p_raw": "wilcoxon_p_raw (per-group accuracy)",
+            "wilcoxon_p_holm": "wilcoxon_p_holm (per-group accuracy)",
+        })
+        show["comparison"] = show["comparison"].str.replace("Astar", "A*", regex=False)
         L.append(md_table(show))
-        L.append("\nTest: paired lesion-group bootstrap, 10,000 replicates, the same "
-                 "resample shared across arms and seeds, percentile 95% CI, two-sided. "
-                 "Holm correction is applied across the three planned comparisons "
-                 "within each endpoint and subset. A difference whose CI spans zero is "
-                 "reported as inconclusive, not as no difference.\n")
+        L.append("\n**Bootstrap.** Paired lesion-group bootstrap, 10,000 replicates, "
+                 "the same resample shared across arms and seeds, percentile 95% CI, "
+                 "two-sided. A difference whose CI spans zero is reported as "
+                 "inconclusive, not as no difference.\n")
+        L.append("**Wilcoxon.** Signed-rank test on one value per lesion group. For "
+                 "the `test_macro_f1` rows the per-group value is that group's mean "
+                 "per-image correctness, so the Wilcoxon test asks whether the two "
+                 "arms differ in per-lesion accuracy; it is not a test of macro-F1 "
+                 "itself. For the image-quality and explainability rows the per-group "
+                 "value is the metric named in the endpoint column.\n")
+        L.append("**Holm families.** The `family` column shows the correction family. "
+                 "The three planned comparisons (A-B, A-C, B-C) form one family per "
+                 "endpoint and subset. A-A* is a secondary resolution control and is "
+                 "corrected in its own family, so it cannot inflate the planned "
+                 "family's correction.\n")
+        L.append("**Subsets.** `full` is the whole test split (1,502 images, 1,437 "
+                 "lesion groups). `hair_present` is the subset where hair removal "
+                 "actually operates (1,316 images, 1,251 groups). `held_out_pairs` is "
+                 "the 186 synthetic pairs. `test_x1` is the explainability cohort.\n")
     else:
         L.append("_Statistics not computed._\n")
 
@@ -406,15 +444,24 @@ def build_report() -> str:
     L.append("- DERMAHAIR could not be downloaded (no Kaggle credentials), so the "
              "synthetic-hair fallback is used. Held-out test pairs number only "
              f"{quality.get('pairs', 'n/a')}, so paired CIs are wide.\n")
-    L.append("- No independent hair annotations exist, so the screening threshold is "
-             "NOT VERIFIED against real hair labels; it was tuned on synthetic pairs "
-             "and frozen before test scoring.\n")
+    L.append("- The screening threshold is NOT VERIFIED against real hair labels. "
+             "This is a skipped step, not a property of the data: the proposal "
+             "specifies the manually annotated hair masks of Lama et al. "
+             "(ChimeraNet) as an independent reference for screening quality, and "
+             "those masks were not obtained. The threshold was tuned on synthetic "
+             "pairs and frozen before test scoring, which protects the test set but "
+             "does not validate the detector on real hair.\n")
     L.append("- DM-AHR runs at 128 px, so Arm C is upsampled to 224 px for the ViT. "
              "Arm A* controls for that resolution change but cannot separate it from "
              "diffusion artefacts.\n")
-    L.append("- The diffusion model was trained for 20,000 iterations, far below the "
-             "660,000 in the upstream config, so Arm C is not a faithful reproduction "
-             "of the released checkpoint's training budget.\n")
+    L.append("- The diffusion model was trained for 20,000 iterations. The 660,000 "
+             "figure is the `n_iter` value in the vendored upstream config "
+             "`third_party/dmahr/config/akiec.json` at commit `0aee1bb`, and the "
+             "released checkpoint is named `I725000_E1083` (725,000 iterations), so "
+             "the two upstream sources agree in magnitude. The project kit separately "
+             "specifies 20,000 iterations as the reference setting; that conflict is "
+             "recorded in decision log D1. Either way, Arm C is not a reproduction of "
+             "the released checkpoint's training budget.\n")
     L.append("- `df` and `vasc` have very small test supports, so their per-class "
              "numbers are noisy.\n")
     L.append("- The released DM-AHR weights have undocumented training data and are "

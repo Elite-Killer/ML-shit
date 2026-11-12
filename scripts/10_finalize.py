@@ -20,8 +20,9 @@ from dm_ahr_vit.paths import artifact_dir, data_root, manifest_dir  # noqa: E402
 from dm_ahr_vit.utils import record_run, setup_logging, timed  # noqa: E402
 
 log = setup_logging()
-ARMS = ["A", "B", "C", "Astar"]
-ARM_LABEL = {"A": "Original", "B": "DullRazor", "C": "DM-AHR", "Astar": "A* (128 px)"}
+ARMS = ["A", "B", "C", "Astar", "Creleased"]
+ARM_LABEL = {"A": "Original", "B": "DullRazor", "C": "DM-AHR",
+             "Astar": "A* (128 px)", "Creleased": "Creleased (released ckpt)"}
 
 
 def read_json(path: Path):
@@ -330,6 +331,11 @@ def build_report() -> str:
                  "negative result for Arm C.\n")
     L.append("### Mean ± SD over seeds\n")
     L.append(md_table(summ))
+    L.append("\nCreleased is the authors' released DM-AHR checkpoint run through our "
+             "pipeline at a 25-step respaced schedule. It was added after the protocol "
+             "was frozen, so it is exploratory and is not part of the pre-registered "
+             "planned family; its comparisons are reported separately in "
+             "`artifacts/logs/statistical_comparisons_exploratory.csv`.\n")
     L.append("\n### Per-class test metrics (full test split)\n")
     L.append(md_table(pclass))
     L.append("\nUndefined AUC values are reported as NaN with a reason in the "
@@ -429,6 +435,23 @@ def build_report() -> str:
                  "the 186 synthetic pairs. `test_x1` is the explainability cohort.\n")
     else:
         L.append("_Statistics not computed._\n")
+
+    expl_path = artifact_dir("logs") / "statistical_comparisons_exploratory.csv"
+    if expl_path.exists():
+        expl = pd.read_csv(expl_path)
+        L.append("\n### Exploratory: released-checkpoint arm\n")
+        L.append("These rows are **not** part of the pre-registered family. Creleased "
+                 "uses the authors' released DM-AHR checkpoint at a 25-step respaced "
+                 "schedule, a deviation from the paper's 2,000 steps, and its "
+                 "classifier was trained on our budget. Holm correction is applied "
+                 "within this exploratory family only.\n")
+        cols = ["endpoint", "subset", "comparison", "arm_a_mean", "arm_b_mean",
+                "difference", "ci_low", "ci_high", "p_raw", "p_holm",
+                "effect_size_dz", "n_groups"]
+        L.append(md_table(expl[[c for c in cols if c in expl.columns]]))
+        L.append("\nA significant but negligible effect (|Cohen's dz| < 0.2) is "
+                 "flagged in the CSV's `negligible` column and is not described as "
+                 "a meaningful difference.\n")
 
     env = read_json(artifact_dir("logs") / "environment_report.json") or {}
     L.append("## Compute environment\n")

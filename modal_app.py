@@ -39,6 +39,8 @@ image = (
         "tqdm==4.67.1",
         "requests==2.32.3",
         "gdown==5.2.0",
+        "python-docx==1.1.2",
+        "pytest==8.3.4",
     )
     .env(
         {
@@ -53,6 +55,12 @@ image = (
     .add_local_dir("scripts", f"{REMOTE_ROOT}/scripts")
     .add_local_dir("configs", f"{REMOTE_ROOT}/configs")
     .add_local_dir("third_party", f"{REMOTE_ROOT}/third_party")
+    .add_local_dir("reports", f"{REMOTE_ROOT}/reports")
+    .add_local_dir("docs", f"{REMOTE_ROOT}/docs")
+    .add_local_dir("tests", f"{REMOTE_ROOT}/tests")
+    .add_local_file("README.md", f"{REMOTE_ROOT}/README.md")
+    .add_local_file("requirements.txt", f"{REMOTE_ROOT}/requirements.txt")
+    .add_local_file("requirements.lock", f"{REMOTE_ROOT}/requirements.lock")
 )
 
 
@@ -423,6 +431,11 @@ def exploratory_stats():
 @app.function(image=image, cpu=4, memory=16384, timeout=3600, volumes={"/vol": vol})
 def acceptance():
     return _run("check_acceptance.py")
+
+
+@app.function(image=image, cpu=4, memory=16384, timeout=3600, volumes={"/vol": vol})
+def deliverable_gates():
+    return _run("20_deliverable_gates.py")
 
 
 @app.function(image=image, cpu=4, memory=16384, timeout=3600, volumes={"/vol": vol})

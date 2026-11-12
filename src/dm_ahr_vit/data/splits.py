@@ -103,4 +103,5 @@ def verify_splits(df: pd.DataFrame) -> dict:
                 problems.append(f"group overlap between {a} and {b}: {len(ga & gb)} groups")
     if df["image_id"].duplicated().any():
         problems.append("duplicate image_id in split frame")
-    return {"ok": not problems, "problems": problems}
+    sizes = {s: int((df["split"] == s).sum()) for s in splits}
+    return {"ok": not problems, "problems": problems, "sizes": sizes}

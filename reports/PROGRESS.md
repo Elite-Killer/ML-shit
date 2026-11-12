@@ -144,3 +144,44 @@ Nothing outstanding. A faithful Arm C requires the full training and sampling
 budget (decision log D1, D12); everything else is reproducible from
 `notebooks/02_pipeline_reproduction.ipynb`.
 
+## 2026-11-12 - Released-checkpoint arm evaluated; reconstruction proven
+
+The sandbox was wiped mid-session, so this phase started by re-establishing the
+new Modal account rather than from the old one.
+
+- **Uploads were already complete** on `dmahr-vit-vol` in the new account
+  (`motog5g987`): manifests, `processed/Creleased`, `synth`, ViT checkpoints,
+  predictions and logs. `data/raw/isic_212`, `processed/B` and `processed/Astar`
+  were missing and have been copied across from the old account.
+- **Reconstruction verified exactly.** The reconstructed data package squashed
+  images to a square at eval. Sweeping resize sizes against the recorded A/42
+  run found the original pipeline: resize 255 (`int(224 * 1.14)`) then centre
+  crop 224. With it, A/42 reproduces 1,502/1,502 predictions, a maximum
+  probability difference of 0.0 and identical macro-F1 (0.7510451247030895).
+  `scripts/21_verify_reconstruction.py` automates the check (decision D23).
+- **Creleased evaluated** on all three seeds: macro-F1 0.708 / 0.688 / 0.743,
+  mean 0.713 ± 0.028 full and 0.712 ± 0.029 hair-present. XAI ran for all three
+  seeds. The first evaluation used the wrong transform and was discarded and
+  re-run.
+- **Image quality** now scores all four conditions on the 186 held-out pairs:
+  B 35.732 / 0.918, Creleased 27.076 / 0.703, hairy input 22.127 / 0.520,
+  C 14.292 / 0.074. Creleased clears the >=hairy+3 dB rule by 4.95 dB but sits
+  8.66 dB behind classical inpainting.
+- **Exploratory statistics** (`statistical_comparisons_exploratory.csv`):
+  A-Creleased +0.038 (95% CI +0.005 to +0.071, Holm p=0.048, dz 0.05,
+  negligible); B-Creleased -0.015 (CI -0.049 to +0.019, Holm p=0.400). The
+  released checkpoint does not beat classical removal. The pre-registered
+  `09_stats.py` arm list is untouched.
+- **Gates.** Acceptance: 13 pass, G4 blocked (no leakage-controlled diffusion
+  training run at a realistic budget - unchanged, decision D1/D12). Deliverable
+  gates: 7 of 8 pass; V7 fails only because its PDF evidence lived in a local
+  `/tmp/verify` scratch directory that the sandbox wipe removed, and no
+  LibreOffice/pymupdf is installed to re-render. The three .docx deliverables
+  themselves are tracked in git and copied to the volume.
+
+## Next step
+
+Nothing outstanding on the research question. Remaining known gaps: Arm C needs
+the full training budget to be a fair test of published DM-AHR (D1, D12), and
+V7's PDF rendering evidence needs a machine with LibreOffice.
+

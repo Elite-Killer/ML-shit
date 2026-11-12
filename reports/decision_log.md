@@ -240,3 +240,43 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
   first test scoring must be recorded as void in the report rather than
   presented as an independent second look.
 
+## D22 - Released-checkpoint arm (Creleased) added as exploratory
+
+- Finding: the authors' released DM-AHR checkpoint, run through our pipeline at
+  a 25-step respaced schedule, produces usable hair removal (PSNR 27.08 /
+  SSIM 0.703 on the 186 held-out pairs, +4.95 dB over the hairy input) and
+  classifies at macro-F1 0.713 ± 0.028 over three seeds.
+- Decision: report it as an **exploratory** arm, not as a pre-registered
+  condition. `scripts/09_stats.py`'s `ARMS` list and the frozen planned family
+  are unchanged; Creleased comparisons live in
+  `artifacts/logs/statistical_comparisons_exploratory.csv` with their own Holm
+  family and an explicit label.
+- Reason: the arm was created after the protocol was frozen, and it deviates
+  from the paper in two ways - 25 sampling steps instead of 2,000, and a
+  classifier trained on our budget rather than the paper's. Folding it into the
+  planned family would retroactively change a committed protocol.
+- Result: A still beats Creleased on the full test split (difference +0.038,
+  95% CI +0.005 to +0.071, Holm p=0.048) but the effect is negligible
+  (Cohen's dz 0.05). B vs Creleased is inconclusive (difference -0.015, CI
+  -0.049 to +0.019, Holm p=0.400). The released checkpoint does not beat
+  classical removal, and diffusion removal remains 8.66 dB behind it on pixel
+  fidelity.
+- Cost: three evaluations and three XAI runs on A100-80GB, plus one CPU image
+  quality pass. No retraining.
+
+## D23 - Eval transform corrected to resize 255 + centre crop 224
+
+- Finding: the reconstructed data package squashed images to a square at eval,
+  which changed predictions. Sweeping resize sizes against the recorded A/42
+  run showed that resize 255 (int(224 * 1.14)) followed by a 224 centre crop
+  reproduces the recorded run exactly: 0 of 1,502 prediction mismatches, maximum
+  probability difference 0.0, macro-F1 identical to 16 significant digits.
+- Decision: adopt that transform, matching `reports/experiment_protocol.md`
+  ("resize 256, centre crop 224" - the recorded runs used 255, the nearest
+  integer to 224 * 1.14).
+- Reason: the reconstruction gate must prove the data code is faithful before
+  any new arm is trusted. It now does, and the check is automated in
+  `scripts/21_verify_reconstruction.py`.
+- Consequence: the first Creleased evaluation used the wrong transform and was
+  discarded and re-run. Only the re-run numbers appear in the report.
+

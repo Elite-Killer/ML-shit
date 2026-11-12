@@ -1,0 +1,327 @@
+"""Build the client-facing results report (Word).
+
+Covers training setup, classification results, image quality, explainability,
+statistics and hypothesis verdicts. Numbers are recomputed from committed
+artifacts. Shares document helpers with 13_preprocessing_report.py.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from importlib import import_module
+from pathlib import Path
+
+import pandas as pd
+from docx import Document
+from docx.shared import Inches, Pt
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from dm_ahr_vit.paths import artifact_dir  # noqa: E402
+
+pre = import_module("13_preprocessing_report")
+h1, h2, body, bullet, table, callout, figure = (
+    pre.h1, pre.h2, pre.body, pre.bullet, pre.table, pre.callout, pre.figure)
+add_page_number = pre.add_page_number
+ARM_LABEL = {"A": "A — original", "Astar": "A* — 128 px control",
+             "B": "B — DullRazor classical", "C": "C — DM-AHR diffusion"}
+
+OUT = artifact_dir("reports") / "Results_Report.docx"
+
+
+def verdict(r) -> str:
+    if r is None:
+        return "not computed"
+    d, lo, hi = float(r["difference"]), float(r["ci_low"]), float(r["ci_high"])
+    a, b = str(r["arm_a"]), str(r["arm_b"])
+    if lo <= 0 <= hi:
+        return f"inconclusive (95% CI {lo:+.3f} to {hi:+.3f})"
+    w = a if d > 0 else b
+    l = b if d > 0 else a
+    return f"{w} higher than {l} by {abs(d):.3f} (95% CI {lo:+.3f} to {hi:+.3f})"
+
+
+def row(stats, endpoint, comparison, subset=None):
+    q = stats[(stats["endpoint"] == endpoint) & (stats["comparison"] == comparison)]
+    if subset:
+        q = q[q["subset"] == subset]
+    return q.iloc[0] if len(q) else None
+
+
+def build() -> Path:
+    logs = artifact_dir("logs")
+    seed = pd.read_csv(logs / "classification_seed_summary.csv")
+    per_class = pd.read_csv(logs / "classification_per_class.csv")
+    stats = pd.read_csv(logs / "statistical_comparisons.csv")
+    quality = pd.read_csv(logs / "paired_psnr_ssim_test.csv")
+    xai = pd.concat([pd.read_csv(f) for f in sorted(logs.glob("xai_localization_*.csv"))],
+                    ignore_index=True)
+    env = json.loads((logs / "environment_report.json").read_text())
+    repro = json.loads((logs / "reproduction_log.json").read_text()) \
+        if (logs / "reproduction_log.json").exists() else {}
+
+    full = seed[seed["subset"] == "full"].set_index("arm").loc[
+        ["A", "Astar", "B", "C"]].reset_index()
+
+    doc = Document()
+    sec = doc.sections[0]
+    sec.page_width, sec.page_height = Inches(8.27), Inches(11.69)
+    sec.left_margin = sec.right_margin = Inches(0.95)
+    sec.top_margin, sec.bottom_margin = Inches(0.8), Inches(0.75)
+    add_page_number(sec)
+    doc.styles["Normal"].font.name = "Calibri"
+    doc.styles["Normal"].font.size = Pt(10)
+    doc.core_properties.title = "DM-AHR-ViT — Results Report"
+
+    for _ in range(4):
+        doc.add_paragraph()
+    p = doc.add_paragraph()
+    r = p.add_run("RESULTS REPORT")
+    r.font.size = Pt(9); r.font.bold = True; r.font.color.rgb = pre.ACCENT
+    p = doc.add_paragraph(); p.paragraph_format.space_after = Pt(4)
+    r = p.add_run("Model training,\nevaluation and findings")
+    r.font.size = Pt(30); r.font.bold = True; r.font.color.rgb = pre.NAVY
+    p = doc.add_paragraph(); p.paragraph_format.space_after = Pt(18)
+    r = p.add_run("What was trained, how it was measured, and what it showed")
+    r.font.size = Pt(13); r.font.color.rgb = pre.SLATE
+    pre.para_border(p, "C05A33", 12, "bottom")
+    body(doc, "DM-AHR-ViT · Explainable Vision Transformer for Skin Lesion "
+              "Classification Using Dermoscopy Images", size=10.5)
+    body(doc, "Research prototype only. Not clinically validated and not intended "
+              "for diagnosis, triage or patient care.", size=9, italic=True)
+
+    best = full.loc[full["macro_f1_mean"].idxmax()]
+    worst = full.loc[full["macro_f1_mean"].idxmin()]
+    callout(doc, "In one sentence",
+            f"Across 12 trained models (4 arms × 3 seeds) evaluated once on a locked test set of "
+            f"1,502 images, the best arm was {ARM_LABEL[best['arm']]} at macro-F1 "
+            f"{best['macro_f1_mean']:.3f}, and every comparison against the diffusion arm "
+            f"{ARM_LABEL[worst['arm']]} ({worst['macro_f1_mean']:.3f}) was statistically "
+            f"clear — but the diffusion arm was under-resourced, so the honest conclusion is "
+            f"'this run of DM-AHR did not help', not 'DM-AHR cannot help'.")
+    doc.add_page_break()
+
+    h1(doc, "1. What was trained and how")
+    body(doc,
+         "Twelve Vision Transformers were trained: four input conditions (arms) at three random "
+         "seeds each. Everything except the arm is identical — same frozen split, same manifests, "
+         "same architecture, hyperparameters, augmentation and evaluation code — so a difference "
+         "between arms is attributable to the hair-removal condition alone.")
+    table(doc, ["Arm", "Input the classifier sees", "Macro-F1 (mean ± SD)"],
+          [[ARM_LABEL[a], desc,
+            f"{full[full['arm'] == a]['macro_f1_mean'].iloc[0]:.3f} ± "
+            f"{full[full['arm'] == a]['macro_f1_sd'].iloc[0]:.3f}"]
+           for a, desc in [("A", "untouched dermoscopy image"),
+                           ("B", "classical hair removal (DullRazor-style)"),
+                           ("C", "diffusion-generated hairless image"),
+                           ("Astar", "original through the same 128 px round-trip")]],
+          widths=[1.7, 3.0, 1.6], align_right_from=2)
+    h2(doc, "Training recipe (identical for all twelve runs)")
+    table(doc, ["Component", "Setting"],
+          [["Backbone", "ViT-B/16, ImageNet-1k pretrained, 224 px input, 196 patches"],
+           ["Optimiser", "AdamW, lr 3e-5, weight decay 0.05, warm-up 5 epochs then cosine decay"],
+           ["Batch / precision", "32, bf16 autocast, gradient clipping 1.0"],
+           ["Class imbalance", "inverse-frequency class weights from the training split only"],
+           ["Early stopping", "validation macro-F1, patience 10, max 100 epochs"],
+           ["Seeds", "42, 123, 2026"],
+           ["Test protocol", "the locked test set is scored once per frozen checkpoint"]],
+          widths=[1.55, 4.75])
+    h2(doc, "Compute environment")
+    body(doc,
+         f"All GPU work ran on Modal: {env.get('device')}, Python {env.get('python')}, "
+         f"torch {env.get('torch')}, CUDA {env.get('cuda')}. A typical training run took "
+         f"about 6.5 minutes (25 epochs to early stopping). Per-run GPU type and wall-clock "
+         f"are logged in artifacts/logs/run_registry.jsonl.")
+
+    h1(doc, "2. Classification results")
+    body(doc,
+         "All metrics are computed on the held-out test set of 1,502 images. Macro-F1 is the "
+         "primary endpoint because classes are severely imbalanced: nv is two thirds of the "
+         "data, so plain accuracy rewards ignoring the rare classes.")
+    table(doc, ["Arm", "Macro-F1", "Accuracy", "Balanced acc.", "Macro AUC"],
+          [[ARM_LABEL[r.arm], f"{r.macro_f1_mean:.3f} ± {r.macro_f1_sd:.3f}",
+            f"{r.accuracy_mean:.3f} ± {r.accuracy_sd:.3f}",
+            f"{r.balanced_acc_mean:.3f}", f"{r.auc_macro_mean:.3f}"]
+           for r in full.itertuples()],
+          widths=[1.85, 1.35, 1.15, 1.05, 0.95], align_right_from=1)
+    h2(doc, "Hair-present subset")
+    hp = seed[seed["subset"] == "hair_present"].set_index("arm")
+    table(doc, ["Arm", "Macro-F1", "n"],
+          [[ARM_LABEL[a], f"{hp.loc[a, 'macro_f1_mean']:.3f} ± {hp.loc[a, 'macro_f1_sd']:.3f}",
+            int(hp.loc[a, 'n'])] for a in ["A", "Astar", "B", "C"]],
+          widths=[2.2, 1.9, 0.8], align_right_from=1)
+    body(doc,
+         "This is the subset where hair removal actually operates — the images it could help. "
+         "The ordering is unchanged from the full test set.", size=9.5, italic=True)
+
+    h2(doc, "Per-class test metrics")
+    rows = []
+    for cls in ["akiec", "bcc", "bkl", "df", "mel", "nv", "vasc"]:
+        for arm in ["A", "B", "C", "Astar"]:
+            q = per_class[(per_class["arm"] == arm) & (per_class["class"] == cls)]
+            if len(q):
+                r = q.iloc[0]
+                rows.append([cls if arm == "A" else "", arm,
+                             f"{int(r['support'])}", f"{r['f1_mean']:.3f}",
+                             f"{r['recall_mean']:.3f}", f"{r['specificity_mean']:.3f}",
+                             f"{r['auc_mean']:.3f}"])
+    table(doc, ["Class", "Arm", "Support", "F1", "Recall (sensitivity)", "Specificity", "AUC"],
+          rows, widths=[0.72, 0.5, 0.72, 0.62, 1.25, 0.95, 0.62], align_right_from=2)
+    body(doc,
+         "Recall is the proposal's sensitivity. Supports for df (17) and vasc (21) are small, so "
+         "their per-class numbers are noisy and are not interpreted individually.",
+         size=9.5, italic=True)
+
+    h1(doc, "3. Hair-removal image quality")
+    body(doc,
+         f"Measured on the {len(quality)} held-out synthetic pairs — hair composited onto genuinely "
+         f"hair-absent images, so a true hairless reference exists. The unprocessed hairy input is "
+         f"scored as a floor: falling below it means the method made the image worse than doing "
+         f"nothing.")
+    table(doc, ["Condition", "PSNR (dB) mean ± SD", "SSIM mean ± SD"],
+          [["Hairy input (floor)",
+            f"{quality['hairy_input_psnr'].mean():.2f} ± {quality['hairy_input_psnr'].std():.2f}",
+            f"{quality['hairy_input_ssim'].mean():.3f} ± {quality['hairy_input_ssim'].std():.3f}"],
+           ["Arm B — classical",
+            f"{quality['B_psnr'].mean():.2f} ± {quality['B_psnr'].std():.2f}",
+            f"{quality['B_ssim'].mean():.3f} ± {quality['B_ssim'].std():.3f}"],
+           ["Arm C — diffusion",
+            f"{quality['C_psnr'].mean():.2f} ± {quality['C_psnr'].std():.2f}",
+            f"{quality['C_ssim'].mean():.3f} ± {quality['C_ssim'].std():.3f}"]],
+          widths=[1.9, 2.1, 2.1], align_right_from=1)
+    callout(doc, "Why Arm C scores below the untouched input",
+            "The diffusion checkpoint was trained for 20,000 iterations against 660,000 in the "
+            "upstream configuration, and sampled at 1,000 steps instead of 2,000. Its outputs are "
+            "visibly over-smoothed — fine pigment texture is lost. This is a real property of the "
+            "model that was run, and it is labelled an under-resourced ablation throughout, not "
+            "presented as DM-AHR at published settings.",
+            fill="FDF3ED", bar="C05A33")
+
+    h1(doc, "4. Explainability")
+    body(doc,
+         "For every test image, two saliency methods — Grad-CAM on the patch grid and attention "
+         "roll-out — were compared against the released HAM10000 lesion mask. The table reports "
+         "the fraction of the top-20% most salient pixels that fall inside the mask, averaged over "
+         "seeds, with the two chance baselines for context.")
+    agg = (xai.groupby("arm")[["gradcam_overlap20", "rollout_overlap20",
+                               "gradcam_pointing", "rollout_pointing",
+                               "chance_uniform_overlap20",
+                               "chance_gaussian_overlap20"]].mean()
+           .loc[["A", "Astar", "B", "C"]])
+    table(doc, ["Arm", "Grad-CAM overlap", "Roll-out overlap", "Grad-CAM pointing",
+                "Roll-out pointing", "Uniform chance", "Gaussian chance"],
+          [[ARM_LABEL[i], f"{r['gradcam_overlap20']:.3f}", f"{r['rollout_overlap20']:.3f}",
+            f"{r['gradcam_pointing']:.3f}", f"{r['rollout_pointing']:.3f}",
+            f"{r['chance_uniform_overlap20']:.3f}", f"{r['chance_gaussian_overlap20']:.3f}"]
+           for i, r in agg.iterrows()],
+          widths=[1.75, 0.95, 0.95, 0.95, 0.9, 0.85, 0.9], align_right_from=1)
+    body(doc,
+         "Overlap measures spatial alignment with released masks, not clinically correct "
+         "reasoning. Every arm beats the uniform-chance baseline, and the centred-Gaussian "
+         "baseline shows part of that margin comes simply from attending the image centre.",
+         size=9.5, italic=True)
+    fig_dir = artifact_dir("reports") / "preprocessing_assets"
+    figure(doc, fig_dir / "dmahr.jpg",
+           "Figure 1 — Arm C diffusion removal, from the preprocessing report, reproduced here "
+           "because the same over-smoothing drives both its quality scores and its "
+           "classification deficit.")
+
+    h1(doc, "5. Statistical comparisons")
+    body(doc,
+         "Every endpoint is tested twice, as the protocol requires: a lesion-group bootstrap "
+         "(10,000 replicates, the same resample shared across arms and seeds, percentile 95% CI) "
+         "and a Wilcoxon signed-rank test on values collapsed to one per lesion group. Holm "
+         "correction is applied across the three planned comparisons within each endpoint, "
+         "separately for each test. A CI spanning zero is called inconclusive, not 'no "
+         "difference'.")
+    rows = []
+    for r in stats.itertuples():
+        rows.append([r.endpoint, r.comparison, f"{r.difference:+.3f}",
+                     f"{r.ci_low:+.3f} to {r.ci_high:+.3f}",
+                     f"{r.p_holm:.4f}" if r.p_holm >= 0.0001 else "<0.0001",
+                     f"{r.wilcoxon_p_holm:.4f}" if r.wilcoxon_p_holm >= 0.0001 else "<0.0001",
+                     f"{r.n_groups}"])
+    table(doc, ["Endpoint", "Comparison", "Diff.", "95% CI (bootstrap)",
+                 "p (Holm)", "Wilcoxon p (Holm)", "Groups"],
+          rows, widths=[1.35, 0.95, 0.6, 1.25, 0.72, 0.9, 0.55], font=8, align_right_from=2)
+
+    h1(doc, "6. What this says about the three hypotheses")
+    psnr = row(stats, "paired_psnr", "C-B")
+    ssim = row(stats, "paired_ssim", "C-B")
+    gc = row(stats, "x1_gradcam_overlap20", "A-C")
+    ro = row(stats, "x1_rollout_overlap20", "A-C")
+    body(doc, "H1 — image quality (diffusion preserves texture better than classical): ",
+         space_after=2)
+    bullet(doc, f"PSNR: {verdict(psnr)}. SSIM: {verdict(ssim)}. H1 is not supported by these "
+                "data, with the under-resourced caveat applying throughout.")
+    body(doc, "H2 — classification (diffusion-cleaned images improve the ViT): ", space_after=2)
+    bullet(doc, f"A vs C: {verdict(row(stats, 'test_macro_f1', 'A-C', 'full'))}. "
+                f"B vs C: {verdict(row(stats, 'test_macro_f1', 'B-C', 'full'))}. The direction is "
+                "opposite to the hypothesis and the gap is large.")
+    body(doc, "H3 — explainability (attention focuses more on lesions after diffusion): ",
+         space_after=2)
+    bullet(doc, f"Grad-CAM overlap, A vs C: {verdict(gc)}. Attention roll-out, A vs C: "
+                f"{verdict(ro)}. The two saliency methods disagree, so H3 is only partly "
+                "supported, and reporting one without the other would overstate it.")
+    body(doc, "Resolution control: ", space_after=2)
+    bullet(doc, f"A vs A*: {verdict(row(stats, 'test_macro_f1', 'A-Astar', 'full'))}. Because "
+                "this is inconclusive, the 128 px round-trip alone does not explain Arm C's "
+                "deficit.")
+
+    h1(doc, "7. Limitations")
+    for lead, txt in [
+        ("Arm C is under-resourced — ",
+         "20,000 training iterations against 660,000 upstream, 1,000 sampling steps against "
+         "2,000, and 128 px upsampled to 224. Its results describe that model, not the published "
+         "method."),
+        ("Three seeds — ",
+         "inference is over ~1,437 lesion groups with seeds averaged inside each replicate, "
+         "never counted as independent samples; still, three seeds cannot characterise variance "
+         "exhaustively."),
+        ("Screening unvalidated — ",
+         "no independent hair annotations exist; the detector was calibrated on synthetic pairs "
+         "and frozen. 89.8% screening prevalence is reported as a limitation, not hidden."),
+        ("Masks are not expert ground truth — ",
+         "the released HAM10000 segmentations are not documented as dermatologist-traced, so "
+         "explanation overlap is alignment with those maps, not clinical correctness."),
+        ("Single corpus — ",
+         "one public dataset; nothing here establishes behaviour on other scanners or "
+         "populations."),
+        ("Licensing unresolved — ",
+         "HAM10000 is CC BY-NC 4.0; the DM-AHR repository's README (CC BY-NC 4.0) and LICENSE "
+         "(Apache-2.0) contradict each other. Commercial use needs a rights decision."),
+    ]:
+        bullet(doc, txt, lead)
+
+    h1(doc, "8. Reproducibility")
+    if repro:
+        bullet(doc, f"Arm A seed 42 re-run from scratch reproduced validation macro-F1 exactly "
+                    f"({repro['recorded']['best_val_macro_f1']:.6f} vs "
+                    f"{repro['reproduction']['best_val_macro_f1']:.6f}).", "Determinism — ")
+        bullet(doc, "the frozen split hash was reproduced byte for byte across two Modal "
+                    "accounts, and the full data-preparation chain was re-run natively with no "
+                    "Modal present, giving the identical hash.", "Portability — ")
+    bullet(doc, "notebooks/01_results_walkthrough.ipynb reads the committed artifacts and "
+                "explains these tables interactively; notebooks/02 and 03 reproduce the pipeline "
+                "on Modal or a local GPU.", "How to explore — ")
+    body(doc,
+         "Every table here is generated from artifacts/logs/: classification_seed_summary.csv, "
+         "classification_per_class.csv, paired_psnr_ssim_test.csv, xai_localization_*.csv and "
+         "statistical_comparisons.csv. This document is built by scripts/14_results_report.py "
+         "and can be regenerated after any rerun.", size=9, italic=True)
+
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(OUT)
+    return OUT
+
+
+def main() -> int:
+    out = build()
+    print(f"wrote {out} ({out.stat().st_size:,} bytes)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

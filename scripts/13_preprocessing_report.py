@@ -141,6 +141,11 @@ def table(doc: Document, headers: list[str], rows: list[list[str]],
     t.alignment = WD_TABLE_ALIGNMENT.CENTER
     t.autofit = False
     hdr = t.rows[0].cells
+    # Repeat the header row when the table crosses a page.
+    tr_pr = t.rows[0]._tr.get_or_add_trPr()
+    tbl_header = OxmlElement("w:tblHeader")
+    tbl_header.set(qn("w:val"), "true")
+    tr_pr.append(tbl_header)
     for i, h in enumerate(headers):
         hdr[i].text = ""
         p = hdr[i].paragraphs[0]
@@ -152,7 +157,12 @@ def table(doc: Document, headers: list[str], rows: list[list[str]],
         r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
         shade(hdr[i], "1F3864")
     for ri, row in enumerate(rows):
-        cells = t.add_row().cells
+        tr = t.add_row()
+        # A row must not split across a page break.
+        tr_pr = tr._tr.get_or_add_trPr()
+        cant = OxmlElement("w:cantSplit")
+        tr_pr.append(cant)
+        cells = tr.cells
         for i, val in enumerate(row):
             cells[i].text = ""
             p = cells[i].paragraphs[0]

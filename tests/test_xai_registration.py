@@ -1,4 +1,4 @@
-"""The lesion mask must be carried through the same geometry as the model input."""
+"""The lesion mask must be carried through the same geometry as the model input, for every arm."""
 
 import numpy as np
 import pytest
@@ -8,80 +8,136 @@ from PIL import Image
 from dm_ahr_vit.config import load_config
 from dm_ahr_vit.data.dataset import IMAGENET_MEAN, IMAGENET_STD, build_transforms
 from dm_ahr_vit.data.masks import load_mask_224, load_mask_registered
+from dm_ahr_vit.xai.batched import (
+    MultiLayerGradCAM,
+    attention_rollout_batch,
+    localization_scores,
+    metric_definitions,
+    random_map_baselines,
+)
+from dm_ahr_vit.xai.geometry import ARM_STORED_SIZE, mask_to_model_frame, shift_zero_fill
 from dm_ahr_vit.xai.vit_xai import (
+    GradCAM,
+    attention_rollout,
     lesion_overlap,
+    pointing_game,
     salient_in_lesion,
     top_region_centroid_distance,
 )
 
 CFG = load_config("configs/vit.json")
+FULL_WH = (600, 450)
+BOX = (0.30, 0.35, 0.70, 0.80)          # a lesion-like box, off-centre vertically
 
 
-def _frame(size_wh, box_frac):
-    """An image with a bright box at fractional coordinates, and the matching full-frame mask."""
+def _box_image(size_wh, box=BOX):
     w, h = size_wh
-    x0, y0, x1, y1 = (int(box_frac[0] * w), int(box_frac[1] * h),
-                      int(box_frac[2] * w), int(box_frac[3] * h))
     img = np.zeros((h, w, 3), np.uint8)
-    img[y0:y1, x0:x1] = 255
-    return Image.fromarray(img), (x0, y0, x1, y1)
+    img[int(box[1] * h):int(box[3] * h), int(box[0] * w):int(box[2] * w)] = 255
+    return Image.fromarray(img)
 
 
-def _model_input_box(img: Image.Image) -> np.ndarray:
+def _model_input_bright(img):
     t = build_transforms(CFG, train=False)(img)
     mean = torch.tensor(IMAGENET_MEAN)[:, None, None]
     std = torch.tensor(IMAGENET_STD)[:, None, None]
-    return ((t * std + mean).mean(0).numpy() > 0.5)
+    return (t * std + mean).mean(0).numpy() > 0.5
 
 
-def _iou(a: np.ndarray, b: np.ndarray) -> float:
+def _iou(a, b):
     a, b = a.astype(bool), b.astype(bool)
     return float((a & b).sum() / max((a | b).sum(), 1))
 
 
-@pytest.mark.parametrize("size_wh", [(600, 450), (128, 128)])
-def test_registered_mask_matches_the_model_input(tmp_path, size_wh):
-    # a lesion-like box, centred horizontally and low in the frame, so a crop matters
-    img, _ = _frame(size_wh, (0.30, 0.35, 0.70, 0.80))
-    full_mask_wh = (600, 450)                       # masks are stored at the original size
-    mask_img, _ = _frame(full_mask_wh, (0.30, 0.35, 0.70, 0.80))
+@pytest.mark.parametrize("arm", sorted(ARM_STORED_SIZE))
+def test_mask_stays_aligned_with_the_image_the_model_sees(arm):
+    full = _box_image(FULL_WH)
+    stored = full.resize(ARM_STORED_SIZE[arm], Image.Resampling.BICUBIC)   # how the arm stores it
+    mask = mask_to_model_frame(full.convert("L"), ARM_STORED_SIZE[arm], 224)
+    seen = _model_input_bright(stored)
+    assert _iou(mask, seen) > 0.9, (arm, _iou(mask, seen))
+
+
+def test_mask_fraction_in_model_frame_differs_by_arm():
+    fr = {a: float(mask_to_model_frame(_box_image(FULL_WH).convert("L"), wh, 224).mean())
+          for a, wh in ARM_STORED_SIZE.items()}
+    assert fr["A"] == pytest.approx(fr["B"]) and fr["Astar"] == pytest.approx(fr["Cv2"])
+    # 600x450 loses the sides to the crop (box covers ~0.31 of the frame); 128x128 loses less (~0.23)
+    assert fr["A"] == pytest.approx(0.311, abs=0.01) and fr["Cv2"] == pytest.approx(0.233, abs=0.01)
+
+
+def test_legacy_squash_is_misregistered_for_full_size_images(tmp_path):
+    full = _box_image(FULL_WH).convert("L")
     p = tmp_path / "m.png"
-    mask_img.convert("L").save(p)
-    truth = _model_input_box(img)
-    registered = load_mask_registered(p, img.size, 224)
-    assert _iou(registered, truth) > 0.93
+    full.save(p)
+    seen = _model_input_bright(_box_image(FULL_WH))
+    assert _iou(load_mask_224(p, 224), seen) < 0.6
+    assert _iou(load_mask_registered(p, None, 224), seen) > 0.93
 
 
-def test_legacy_mask_is_misregistered_for_full_size_images(tmp_path):
-    img, _ = _frame((600, 450), (0.30, 0.35, 0.70, 0.80))
-    mask_img, _ = _frame((600, 450), (0.30, 0.35, 0.70, 0.80))
-    p = tmp_path / "m.png"
-    mask_img.convert("L").save(p)
-    truth = _model_input_box(img)
-    legacy = load_mask_224(p, 224)
-    assert _iou(legacy, truth) < 0.6                 # documents the defect in the recorded runs
-    assert legacy.mean() < truth.mean()              # and shows the mask was shrunk toward the centre
+def test_metric_definitions_come_from_the_docstrings():
+    text = metric_definitions(0.2)
+    for word in ("recall", "Precision", "Pointing", "Centroid"):
+        assert word in text
 
 
-def test_precision_and_recall_definitions_differ_as_documented():
+def test_recall_precision_pointing_centroid_on_known_maps():
     sal = np.zeros((10, 10))
-    sal[:2, :] = 1.0                                 # top 20% = the first two rows (20 pixels)
+    sal[:2, :] = 1.0
     mask = np.zeros((10, 10), np.uint8)
-    mask[:4, :] = 1                                  # lesion = first four rows (40 pixels)
-    assert salient_in_lesion(sal, mask, 0.2) == 1.0  # all salient pixels are inside the lesion
-    assert lesion_overlap(sal, mask, 0.2) == 0.5     # but they cover half of the lesion
-    small = np.zeros((10, 10), np.uint8)
-    small[:1, :] = 1
-    assert salient_in_lesion(sal, small, 0.2) == 0.5
-    assert lesion_overlap(sal, small, 0.2) == 1.0
+    mask[:4, :] = 1
+    assert salient_in_lesion(sal, mask, 0.2) == 1.0 and lesion_overlap(sal, mask, 0.2) == 0.5
+    s = localization_scores(sal, mask, 0.2)
+    assert (s["recall"], s["precision"]) == (0.5, 1.0)
+    assert s["pointing"] == pointing_game(sal, mask)
+    assert s["centroid"] == pytest.approx(top_region_centroid_distance(sal, mask, 0.2))
+    sal2 = np.zeros((20, 20))
+    sal2[5:10, 5:10] = 1.0
+    m2 = np.zeros((20, 20), np.uint8)
+    m2[5:10, 10:15] = 1
+    assert top_region_centroid_distance(sal2, m2, 25 / 400) == pytest.approx(5 / 20)
 
 
-def test_centroid_distance_zero_when_top_region_sits_on_the_lesion():
-    sal = np.zeros((20, 20))
-    sal[5:10, 5:10] = 1.0
-    mask = np.zeros((20, 20), np.uint8)
-    mask[5:10, 5:10] = 1
-    assert top_region_centroid_distance(sal, mask, 25 / 400) == pytest.approx(0.0, abs=1e-6)
-    mask2 = np.zeros((20, 20), np.uint8)
-    mask2[5:10, 10:15] = 1
-    assert top_region_centroid_distance(sal, mask2, 25 / 400) == pytest.approx(5 / 20, abs=1e-6)
+def test_random_baselines_match_their_expectations():
+    mask = np.zeros((224, 224), np.uint8)
+    mask[60:160, 50:170] = 1
+    b = random_map_baselines(mask, seed=1, draws=100)
+    area = float(mask.mean())
+    assert b["rand_pixel_recall"] == pytest.approx(0.2, abs=0.01)
+    assert b["rand_pixel_precision"] == pytest.approx(area, abs=0.01)
+    assert b["rand_pixel_pointing"] == pytest.approx(area, abs=0.03)
+    assert abs(b["rand_patch_recall"] - 0.2) < 0.03
+
+
+def test_shift_zero_fill_moves_image_and_mask_together():
+    a = np.arange(36, dtype=float).reshape(6, 6)
+    s = shift_zero_fill(a, 2, -1)
+    assert s[0, 2] == a[1, 0] and s[:, :2].sum() == 0 and s[-1].sum() == 0
+    assert shift_zero_fill(torch.ones(3, 6, 6), 9, 0).sum() == 0
+
+
+def _tiny_vit():
+    from torchvision.models.vision_transformer import VisionTransformer
+    torch.manual_seed(0)
+    return VisionTransformer(image_size=32, patch_size=8, num_layers=3, num_heads=2,
+                             hidden_dim=16, mlp_dim=32, num_classes=7).eval()
+
+
+def test_batched_rollout_matches_single_image_rollout():
+    model = _tiny_vit()
+    x = torch.randn(3, 3, 32, 32)
+    batch = attention_rollout_batch(model, x)
+    for i in range(3):
+        assert np.allclose(batch[i], attention_rollout(model, x[i:i + 1]), atol=1e-5)
+
+
+def test_batched_gradcam_matches_single_image_gradcam_on_the_patch_grid():
+    model = _tiny_vit()
+    x = torch.randn(3, 3, 32, 32)
+    with MultiLayerGradCAM(model) as cam:
+        maps, idx = cam(x)
+    for i in range(3):
+        with GradCAM(model) as g:
+            single = g(x[i:i + 1], class_idx=int(idx[i]))
+        assert np.allclose(maps["patch_grid"][i], single, atol=1e-5)
+    assert maps["last_ln1"].shape == (3, 4, 4) and np.isfinite(maps["last_ln1"]).all()

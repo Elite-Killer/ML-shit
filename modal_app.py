@@ -42,6 +42,7 @@ image = (
         "python-docx==1.1.2",
         "pytest==8.3.4",
         "pymupdf==1.24.14",
+        "lpips==0.1.4",
     )
     .env(
         {
@@ -666,6 +667,39 @@ def image_quality(split: str = "test"):
 def xai_registration_check():
     """Mask-only geometry check on the validation split (no model, no test data)."""
     return _run("56_xai_registration_check.py")
+
+
+def _clean_commit() -> str:
+    """Current commit; refuses to run with uncommitted changes to code or configs."""
+    dirty = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=no", "--", "scripts", "src",
+         "configs", "tests", "modal_app.py"], capture_output=True, text=True).stdout.strip()
+    if dirty:
+        raise SystemExit("commit scripts before running:\n" + dirty)
+    return subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True,
+                          check=True).stdout.strip()
+
+
+@app.function(image=image, gpu="A10G", timeout=3600, volumes={"/vol": vol},
+              retries=modal.Retries(max_retries=2, initial_delay=5.0))
+def xai_v2(arm: str, seed: int, split: str, commit: str):
+    """Corrected explanation analysis for one checkpoint (see scripts/58_xai_corrected.py)."""
+    return _run("58_xai_corrected.py", ["--arm", arm, "--seed", str(seed), "--split", split,
+                                        "--commit", commit])
+
+
+@app.local_entrypoint()
+def xai_v2_all(split: str = "test"):
+    commit = _clean_commit()
+    if split == "val":
+        runs = [(a, s) for a in ("A", "Astar", "B", "Cv2") for s in (42, 123, 2026)]
+    else:
+        eight = (42, 123, 2026, 7, 11, 17, 23, 31)
+        runs = ([(a, s) for a in ("A", "Astar", "B", "Cv2") for s in eight]
+                + [(a, s) for a in ("C", "Creleased") for s in (42, 123, 2026)])
+    print(f"commit {commit}: {len(runs)} runs on split={split}", flush=True)
+    for res in xai_v2.starmap([(a, s, split, commit) for a, s in runs]):
+        print("done", res, flush=True)
 
 
 @app.function(image=image, gpu="A100-80GB", timeout=14400, volumes={"/vol": vol})

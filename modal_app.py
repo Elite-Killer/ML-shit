@@ -510,6 +510,16 @@ def partial_noise_eval(ckpt: str, name: str, tag: str, t0s: str = "600,1000,1500
                  "--offset", str(offset), "--commit", commit])
 
 
+@app.function(image=image, gpu="A100-80GB", timeout=3600, volumes={"/vol": vol})
+def composite_eval(ckpts: str, tag: str, t0s: str = "600,1000", items: int = 48,
+                   seeds: int = 2, commit: str = "unknown"):
+    args = ["--tag", tag, "--t0s", t0s, "--items", str(items), "--seeds", str(seeds),
+            "--commit", commit]
+    for spec in ckpts.split(","):
+        args += ["--ckpt", spec]
+    return _run("45_composite_eval.py", args)
+
+
 @app.function(image=image, gpu="A100-80GB", timeout=7200, volumes={"/vol": vol})
 def gate3_eval(pairs: int = 182, checkpoint: str = "", tag: str = "gate3",
                precision: str = "bf16", replicate_first: int = 0,

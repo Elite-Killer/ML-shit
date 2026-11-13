@@ -140,3 +140,28 @@ The first strand finder, as written in the plan (skeleton length at least 40 px,
 - Full run: 5,996 train/validation images with detector coverage of at least 0.03; 1,893 yielded at least one strand (train 1,521, validation 372). Median harvested area is 0.38% of the image (10th to 99th percentile 0.07% to 10.2%).
 - Agent-reviewed contact sheets (24 random harvested images at seed 0, plus the 12 with the largest harvested area; `artifacts/diagnosis/harvest_review_*.jpg`): the 12 densest were clean (strands only, lesions untouched). Of the 24 random, 3 had small contamination (a ring around an air bubble; a few lesion dots plus ink ticks beside a ruler; a short pen-mark segment), each with very little harvested area. Pale or very fine hair was often missed, which only means fewer donor strands.
 - Change made before training, from the review and not from any score: composites draw sources only from layers with harvested area of at least 0.4% of the image (`MIN_LAYER_FRACTION`, about the median), which removes the low-area layers where the contamination appeared. It costs about half the source layers. The rule was fitted by eye to 24 images, so it is a recorded choice, not a validated one.
+
+## Stage B result, validation real photos (commit 3f79e16 plus the scripts named here; 40 validation-split images, `/root/local/hair_check_val/ids.txt` sha256 7243bcc1)
+
+Fine-tuned from the 50k snapshot for 20,000 iterations on composites (one preemption at about 9,000, resumed from the 9,000 snapshot; one single-batch loss spike of 0.51 at 14,100 that recovered; validation composite loss 0.0150 at 300 iterations, 0.0135 at 20,000, best 0.0122). Evaluated `final_gen.pth`, the snapshot named in the plan, with no snapshot selection.
+
+| Arm | inside/outside change ratio | median hair coverage remaining | images with under half remaining |
+|---|---:|---:|---:|
+| DullRazor (Arm B) | 15.06 | 0.68 | 11 |
+| released DM-AHR | 1.11 | 0.97 | 1 |
+| fixed 50k, t0=600 | 1.69 | 0.87 | 3 |
+| fixed 50k, t0=1000 | 1.46 | 0.84 | 4 |
+| **v2 (composite fine-tune), t0=600** | **1.95** | 0.84 | 7 |
+| **v2 (composite fine-tune), t0=1000** | **1.57** | 0.81 | 7 |
+
+Synthetic check on the same 24 validation pairs as Stage A: margin +7.83 dB at t0=600 and +7.17 dB at t0=1000, 0% of runs below the floor (the 50k model scored +8.95 and +9.25, so the fine-tune cost 1 to 2 dB on the old synthetic hair, still above the +5 dB bar).
+
+**Gate verdict, by the rule written above: fail.** The ratio must be at least 2.0 and it is 1.95 at t0=600 and 1.57 at t0=1000. The visual review of the first eight images (agent-reviewed, `artifacts/diagnosis/real_hair_contact_sheet_stageB_val.png`) shows what the number says: all model outputs are close to the input and thin hair stays visible, only DullRazor visibly changes the image (and damages lesions). Improvement over the 50k model is small: ratio +0.26 at t0=600, +0.11 at t0=1000, more images with under half of the detector coverage left (7 against 3 and 4).
+
+Reading the result: the detector-based ratio is a crude instrument at 128 px, where the detector marks about half of each image (median original coverage 0.50) and fine hair is about one pixel wide, and a diffusion model changes pixels everywhere, which lowers the ratio. That limits what the number can say, but I am not allowed to change the bar after seeing the result, so the gate stays failed.
+
+### Additional measure, written and committed before it is run: ground-truth hair removal on held-out real-hair composites
+
+Because the real-photo ratio cannot tell removal from regeneration noise, add a measure with a known answer: real strands harvested from validation images are pasted onto other validation images (`scripts/45_composite_eval.py`, 48 items, compositing seed 100 that differs from the training seed, 2 noise seeds, DDIM 50 steps, t0 of 600 and 1000, 50k model against v2 final). Reported: PSNR against the clean target with the hairy input as floor and the 128 px resize of the clean target as ceiling; and hair removal at native 128 px, one minus the strand-weighted absolute error of the output over that of the hairy input (1.0 = strands gone, 0 = unchanged).
+
+Rule fixed now: v2 has learned to remove real strands if hair removal is at least 0.5 at t0=600 or t0=1000 **and** at least 0.2 higher than the 50k model at the same t0. If it does not, the fine-tune did not teach strand removal at this training length and setup, whatever the real-photo ratio says. This measure cannot prove removal on photographs; it can only show whether the model learned the task it was trained on.

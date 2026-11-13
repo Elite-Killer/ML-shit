@@ -2,6 +2,8 @@
 
 **Research prototype only. Not clinically validated and not intended for diagnosis, triage or patient care.**
 
+> **Post-review correction (2026-11-13), explanation results.** Every statement below about explanation overlap, the centred-Gaussian baseline (0.644) and H3 is subject to three problems found after it was written: the lesion masks were not registered to the cropped frame the model sees (and differently so per arm), the reports described the overlap metric differently from how the code computes it (lesion coverage, not share of salient pixels inside the lesion), and per-image Grad-CAM overlap is unstable across seeds (Spearman 0.19 to 0.54). Evidence and numbers: `reports/stageE_results.md` section 6 and `artifacts/logs/xai_registration_val.json`. The conclusions are not established until re-measured (`reports/client_plan_and_timeline.md`, Milestone 3).
+
 ## Summary
 
 Test macro-F1 by arm (mean ± SD over seeds): Original 0.741 ± 0.024; A* (128 px) 0.728 ± 0.020; **rebuilt diffusion arm Cv2 0.722 ± 0.012**; DullRazor 0.693 ± 0.017 (these four over eight seeds, `reports/stageE_results.md`); Creleased (released ckpt, exploratory, three seeds) 0.713 ± 0.028; earlier diffusion run C (defective trainer, three seeds, kept as a recorded failure) 0.426 ± 0.013. The first three-seed means were Original 0.750, A* 0.732, DullRazor 0.698, Cv2 0.720; the three-seed SDs were misleading (Original 0.005 against 0.024 with eight seeds), and the Stage C paragraph below uses those first three-seed numbers.

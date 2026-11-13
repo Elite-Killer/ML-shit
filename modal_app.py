@@ -657,6 +657,12 @@ def image_quality(split: str = "test"):
     return _run("07b_image_quality.py", ["--split", split])
 
 
+@app.function(image=image, cpu=4, memory=8192, timeout=3600, volumes={"/vol": vol})
+def xai_registration_check():
+    """Mask-only geometry check on the validation split (no model, no test data)."""
+    return _run("56_xai_registration_check.py")
+
+
 @app.function(image=image, gpu="A100-80GB", timeout=14400, volumes={"/vol": vol})
 def xai_run(arm: str, seed: int):
     return _run("08_xai.py", ["--arm", arm, "--seed", str(seed)])

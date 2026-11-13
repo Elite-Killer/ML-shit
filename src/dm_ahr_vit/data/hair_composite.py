@@ -23,6 +23,8 @@ from .synthetic_hair import render_hair
 
 CLEAN_MAX_COVERAGE = 0.0167
 HAIR_MIN_COVERAGE = 0.03
+# Layers with very little harvested hair were where review found ink, bubble rims and lesion dots.
+MIN_LAYER_FRACTION = 0.004
 ALLOWED_SPLITS = ("train", "val")
 
 
@@ -127,12 +129,16 @@ class HairCompositeDataset(Dataset):
 
 
 def build_datasets(screening_csv: Path, images_dir: Path, layers_dir: Path,
-                   size: int = 128, val_length: int = 192, seed: int = 0):
+                   size: int = 128, val_length: int = 192, seed: int = 0,
+                   min_layer_fraction: float = MIN_LAYER_FRACTION):
     """Train and validation composite datasets from the screening table."""
     scr = pd.read_csv(screening_csv)
+    layer_stats = pd.read_csv(Path(layers_dir) / "summary.csv")
+    usable = set(layer_stats.loc[layer_stats["fraction"] >= min_layer_fraction, "image_id"])
     groups = dict(zip(scr["image_id"], scr["group_id"]))
     tr_t, tr_s = select_pools(scr, "train")
     va_t, va_s = select_pools(scr, "val")
+    tr_s, va_s = [i for i in tr_s if i in usable], [i for i in va_s if i in usable]
     train = HairCompositeDataset("train", tr_t, tr_s, images_dir, layers_dir, size,
                                  fixed=False, seed=seed, groups=groups)
     val = HairCompositeDataset("val", va_t, va_s, images_dir, layers_dir, size,

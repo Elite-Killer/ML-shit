@@ -135,6 +135,9 @@ def test_build_datasets_uses_only_train_and_val_ids(tmp_path):
          for i in range(3)])
     csv = tmp_path / "scr.csv"
     pd.concat([scr, extra]).to_csv(csv, index=False)
+    stats = pd.DataFrame({"image_id": [p.stem for p in lay_dir.glob("*.png")], "fraction": 0.01})
+    stats.loc[stats["image_id"] == "HAIR0", "fraction"] = 0.001   # too little hair to trust
+    stats.to_csv(lay_dir / "summary.csv", index=False)
     train, val = build_datasets(csv, img_dir, lay_dir, size=16, val_length=2)
     mt, mv = train.manifest(), val.manifest()
     assert mt["splits"] == ["train"] and mv["splits"] == ["val"]
@@ -142,3 +145,5 @@ def test_build_datasets_uses_only_train_and_val_ids(tmp_path):
     assert not any(i.startswith("TESTIMG") for i in mt["target_ids"] + mt["source_ids"]
                    + mv["target_ids"] + mv["source_ids"])
     assert len(val) == 2
+    assert "HAIR0" not in mt["source_ids"] and "HAIR1" in mt["source_ids"]
+

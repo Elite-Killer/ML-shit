@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from dm_ahr_vit.config import load_config, save_json, sha256_file  # noqa: E402
 from dm_ahr_vit.diffusion.dmahr_adapter import clean_batch, load_model  # noqa: E402
+from dm_ahr_vit.diffusion.train import _resolve_manifest_path  # noqa: E402
 from dm_ahr_vit.paths import artifact_dir, isic_images_dir, manifest_dir, processed_dir  # noqa: E402
 from dm_ahr_vit.utils import record_run, setup_logging  # noqa: E402
 
@@ -56,7 +57,7 @@ def main() -> int:
             pairs.iloc[args.shard::args.n_shards]
         todo = pd.DataFrame({
             "image_id": pairs["image_id"].values,
-            "source_path": pairs["hairy_path"].values,
+            "source_path": [str(_resolve_manifest_path(q)) for q in pairs["hairy_path"].values],
         })
         out_dir = processed_dir("synth") / args.pairs_split / f"cleaned_{args.arm_name}"
     else:

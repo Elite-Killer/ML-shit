@@ -1,0 +1,5 @@
+loaded DM-AHR checkpoint /root/local/diag/ckpt/new_best.pth (strict)
+[W1113 13:01:00.594961849 NNPACK.cpp:61] Could not initialize NNPACK! Reason: Unsupported hardware.
+step 100/2000 104s
+step 200/2000 224s
+step 300/2000 332s

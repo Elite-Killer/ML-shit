@@ -49,6 +49,28 @@ It is a prediction target below, not yet a finding.
   of the released model's. Then the gap is not in the one-step quantity this trainer optimises and
   the cause lies elsewhere (sampler interaction, data domain).
 
+## H10 (added 13:45 UTC, before the test below is run): sampler precision
+
+New observation O2. The fixed-20k model, sampled on CPU in fp32 for one validation
+pair (`synth_val_ISIC_0024337`, seed 42, 2,000 steps), scores **28.17 dB / SSIM 0.919
+against a 19.54 dB hairy floor** under the Gate-3 scoring (`scripts/34_rescore_fullres.py`,
+`artifacts/diagnosis/sample_new_fixed_20k_pair0.rescore.json`). The earlier GPU run on 8
+pairs scored 14.11 dB / SSIM 0.594 with **bf16 autocast, batch 8**. Tag: Observed, n=1
+against n=8; the two runs differ in precision, device, batch size and pairs.
+
+H10: bf16 autocast over 2,000 sampler steps degrades this model's output (the released
+model tolerates it: 26.64 dB in bf16, n=8).
+
+- Test: `scripts/30_gate3_eval.py --pairs 24 --precision fp32` and `--precision bf16`, same
+  checkpoint (`best_gen.pth`, fixed 20k), same 24 validation pairs, seed 42, 2,000 steps.
+- Prediction if H10 is true: fp32 margin is at least 5 dB above bf16 margin, and fp32
+  margin is at least +2.0 dB.
+- Prediction if H10 is false: fp32 and bf16 agree within 1 dB and both are near the
+  earlier 14 dB, meaning pair 0 was an easy case and the continuation in
+  `reports/prereg_continuation_arm_c.md` stays justified.
+- Anything in between is reported as it is and read as partial.
+- Rule: if fp32 passes, the continuation is **not** launched.
+
 ## Rules in force
 
 1. Every script is committed before it runs; artifacts record git commit, config hash, checkpoint

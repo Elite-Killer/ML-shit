@@ -472,9 +472,10 @@ def trainer_gates(gate: str = "1"):
 
 
 @app.function(image=image, gpu="A100-80GB", timeout=7200, volumes={"/vol": vol})
-def gate3_eval(pairs: int = 182, checkpoint: str = "", tag: str = "gate3"):
+def gate3_eval(pairs: int = 182, checkpoint: str = "", tag: str = "gate3",
+               precision: str = "bf16"):
     os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-    args = ["--pairs", str(pairs), "--tag", tag]
+    args = ["--pairs", str(pairs), "--tag", tag, "--precision", precision]
     if checkpoint:
         args += ["--checkpoint", checkpoint]
     return _run("30_gate3_eval.py", args)

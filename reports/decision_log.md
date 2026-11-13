@@ -354,3 +354,57 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
 - Evidence: `artifacts/logs/respacing_check.json`,
   `scripts/28_respacing_check.py`.
 
+## D27 - Pre-registered trainer gates were mis-specified; Gate 3 is the real test
+
+- What was pre-registered: an 8-pair overfit regression requiring +3 dB over the
+  floor, and a copy test requiring 35 dB, both intended to confirm the noise-level
+  fix before spending on a retrain.
+- Result: Gate 1 failed at -5.18 dB (16.67 dB against a 21.85 dB floor), an
+  improvement on the original -7.31 dB but short. Gate 2 failed at 13.43 dB
+  against 35.0 dB.
+- Why this does not implicate the trainer: both gates train from random
+  initialisation for 2,000 and 1,000 iterations at batch 4, which is 8,000 and
+  4,000 samples - 0.28% and 0.14% of the released checkpoint's 2.9 million. No
+  diffusion model learns its task from that. The thresholds were written as if
+  for an already-trained model, which is right for a warm-start check and wrong
+  for a from-scratch one. The gates measured budget, not wiring.
+- What remains valid: the warm-start check, which fine-tuned the released
+  weights for 1,000 iterations with the fixed trainer and moved PSNR by +0.16 dB.
+  A trainer that disagrees with the sampler would have wrecked those weights,
+  and it did not.
+- Decision: treat Gate 3 (the 20,000-iteration Arm C retrain, evaluated on the
+  182 validation pairs at the paper's 2,000 sampling steps) as the deciding
+  test, and record that the gates were mis-specified rather than quietly
+  dropping them or re-tuning their thresholds after seeing the failures.
+- Not re-tuned: the +3 dB and 35 dB thresholds stand as written. Changing a
+  pre-registered threshold after a failure would defeat the purpose of
+  pre-registration.
+- Also preserved: the defective Arm C checkpoint now lives at
+  `artifacts/checkpoints/dmahr_defective_appendix/best_gen.pth`, because the
+  retrain legitimately overwrites `best_gen.pth`. The old account retains the
+  original tree as well.
+
+## D28 - Gate 3 failed: the encoding fix was necessary but not sufficient
+
+- Result: fixed Arm C retrained from scratch, 20,000 iterations, 654 train pairs,
+  best validation L1 0.02003. On 182 validation pairs at 2,000 sampling steps it
+  scores **14.11 dB against a 20.08 dB floor, margin -5.97 dB. Fail.**
+- Positive control: the released checkpoint through the same script, pairs and
+  steps scores **26.64 dB, margin +6.55 dB, pass.** The evaluation is sound.
+- What the fix demonstrably repaired: condition usage went from 0.97x-1.79x to
+  4.00x-3.32x, matching the released model's 4.16x-4.78x; single-step
+  reconstruction went from 24.58 dB to 41.69 dB at t=200, now better than the
+  released model's 35.89 dB.
+- What it did not repair: multi-step sampling, 14.11 dB against 26.64 dB.
+- Reading: a denoiser whose per-call accuracy exceeds the released model's but
+  whose 2,000-step feedback loop diverges. That is consistent with insufficient
+  smoothness at 20,000 iterations rather than with remaining wiring error, but
+  this is a hypothesis and is recorded as one.
+- Decision: honour the pre-registration. Fail band means stop, do not touch the
+  test set, and keep the original Arm C and its test numbers as the recorded
+  result. No re-tuning of the threshold after the fact.
+- Correction to my own tooling: `snapshot_every` was missing from
+  `configs/dmahr.json` and my fallback `or 0` disabled periodic checkpoints, so
+  this run produced no learning-curve snapshots despite the pre-registration
+  calling for them. Config now sets it to 5000 and the fallback is 5000.
+

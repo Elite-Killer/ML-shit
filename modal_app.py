@@ -439,6 +439,21 @@ def respacing_check():
     return _run("28_respacing_check.py")
 
 
+@app.function(image=image, gpu="A100-80GB", timeout=3600, volumes={"/vol": vol})
+def trainer_gates(gate: str = "1"):
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+    return _run("29_trainer_gates.py", ["--gate", gate])
+
+
+@app.function(image=image, gpu="A100-80GB", timeout=7200, volumes={"/vol": vol})
+def gate3_eval(pairs: int = 182, checkpoint: str = "", tag: str = "gate3"):
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+    args = ["--pairs", str(pairs), "--tag", tag]
+    if checkpoint:
+        args += ["--checkpoint", checkpoint]
+    return _run("30_gate3_eval.py", args)
+
+
 @app.function(image=image, cpu=8, memory=32768, timeout=7200, volumes={"/vol": vol})
 def image_quality(split: str = "test"):
     return _run("07b_image_quality.py", ["--split", split])

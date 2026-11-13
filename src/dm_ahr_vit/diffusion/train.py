@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import time
 from pathlib import Path
 
@@ -34,6 +35,12 @@ def _resolve_manifest_path(path: str) -> Path:
     if marker in str(p):
         return data_root() / str(p).split(marker, 1)[1]
     return p
+
+
+def _manifest_hash(pairs: pd.DataFrame) -> str:
+    """SHA-256 over the ordered pair ids, so a run records exactly what it saw."""
+    ids = sorted(str(i) for i in pairs["pair_id"])
+    return hashlib.sha256("\n".join(ids).encode()).hexdigest()
 
 
 class PairedDataset(Dataset):
@@ -170,6 +177,15 @@ def train(
                 not set(train_ds.pairs["group_id"]) & set(val_ds.pairs["group_id"])
             ),
             "overfit": overfit,
+            # Provenance recorded at run time so a later audit does not have to
+            # infer which noise-level convention or which data this run used.
+            "noise_level_convention": "sqrt_alphas_cumprod_prev per sample, "
+                                      "continuous in [t-1, t] (upstream p_losses)",
+            "num_timesteps": int(net.num_timesteps),
+            "ema": "none",
+            "batch_size": int(cfg["train"]["batch_size"]),
+            "init_from": str(init_from) if init_from is not None else None,
+            "train_manifest_sha256": _manifest_hash(train_ds.pairs),
         },
         out_dir / "training_manifest.json",
     )
@@ -220,6 +236,11 @@ def train(
                 tmp,
             )
             tmp.replace(state_path)
+        # Iteration-numbered weights at a coarser interval, so a learning curve
+        # can be measured afterwards without retraining.
+        snap_every = int(cfg["train"].get("snapshot_every", 5000))
+        if snap_every and (step % snap_every == 0 or step == iterations):
+            torch.save(net.state_dict(), out_dir / f"gen_iter{step:06d}.pth")
 
     torch.save(net.state_dict(), out_dir / "final_gen.pth")
     save_json({"history": history, "best_val": best, "iterations": iterations,

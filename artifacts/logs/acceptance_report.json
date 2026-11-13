@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-13T18:43:55+00:00",
+  "generated_at": "2026-11-13T20:31:50+00:00",
   "gates": [
     {
       "gate": "G1",
@@ -47,7 +47,7 @@
       "gate": "G8",
       "status": "PASS",
       "evidence": "/__modal/volumes/vo-TbNx5IITKUKx9iVQZHZpNF/artifacts/predictions",
-      "detail": "prediction_files=18, metric_files=18, missing=[]"
+      "detail": "prediction_files=38, metric_files=38, missing=[]"
     },
     {
       "gate": "G9",

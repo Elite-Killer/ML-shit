@@ -220,6 +220,32 @@ def dmahr_train(overfit: bool = False):
     return _run("04_dmahr_train.py", ["--overfit"] if overfit else [])
 
 
+@app.function(image=image, gpu="A100-80GB", timeout=86400, volumes={"/vol": vol})
+def dmahr_train_continue(iterations: int = 100000):
+    """Resume the fixed 20k run toward `iterations`, after preserving the 20k files.
+
+    The continuation overwrites best_gen.pth, train_state.pt and the run logs, so
+    the 20,000-iteration originals are copied aside first, once.
+    """
+    import shutil  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    root = Path(os.environ.get("ARTIFACT_ROOT", "/vol/artifacts"))
+    src, dst = root / "checkpoints" / "dmahr", root / "checkpoints" / "dmahr_fixed20k"
+    if not dst.exists():
+        dst.mkdir(parents=True)
+        for name in ("best_gen.pth", "final_gen.pth", "train_state.pt",
+                     "train_log.json", "training_manifest.json"):
+            if (src / name).exists():
+                shutil.copy2(src / name, dst / name)
+        old_log = root / "logs" / "dmahr_train.json"
+        if old_log.exists():
+            shutil.copy2(old_log, dst / "dmahr_train_20k.json")
+        vol.commit()
+        print("preserved 20k files in", dst, flush=True)
+    return _run("04_dmahr_train.py", ["--iterations", str(iterations)])
+
+
 # Arm C diagnosis. Runs on validation synthetic pairs only, so no test-set
 # choice depends on it. A100-40GB is the cheapest card measured to run the
 # sampler without becoming the bottleneck.

@@ -477,6 +477,11 @@ def harvest_hair(workers: int = 8, limit: int = 0):
                 + (["--limit", str(limit)] if limit else []))
 
 
+@app.function(image=image, cpu=4, memory=8192, timeout=1800, volumes={"/vol": vol})
+def harvest_review():
+    return _run("43_harvest_review.py")
+
+
 @app.function(image=image, gpu="A100-80GB", timeout=86400, volumes={"/vol": vol})
 def dmahr_train_v2(iterations: int = 20000, out_name: str = "dmahr_v2", workers: int = 8,
                    warm_start: str = "/vol/artifacts/checkpoints/dmahr/gen_iter050000.pth"):

@@ -105,6 +105,8 @@ def cmd_profile(args) -> None:
               ("new_fixed_20k", args.new, "sampler"),
               ("old_defective_own_encoding_tT", args.old, "tT"),
               ("old_defective_sampler_encoding", args.old, "sampler")]
+    if args.only:
+        models = [m for m in models if m[0] in args.only]
     result = {"pairs": int(n), "levels": list(LEVELS), "hairy_floor_psnr": hairy_floor, "models": {}}
     for name, ckpt, enc in models:
         net = load_model(cfg, Path(ckpt), device="cpu").eval()
@@ -146,7 +148,7 @@ def cmd_profile(args) -> None:
     ckpts = {"released": args.released, "new_fixed_20k": args.new, "old_defective": args.old}
     result["provenance"] = provenance(ckpts, manifest, val["pair_id"].tolist())
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "profile.json").write_text(json.dumps(result, indent=1))
+    (OUT / args.out_name).write_text(json.dumps(result, indent=1))
 
 
 @torch.no_grad()
@@ -241,6 +243,9 @@ def main() -> int:
     sub.choices["profile"].add_argument("--released", default="/root/local/diag/ckpt/released.pth")
     sub.choices["profile"].add_argument("--new", default="/root/local/diag/ckpt/new_best.pth")
     sub.choices["profile"].add_argument("--old", default="/root/local/diag/ckpt/old_defective.pth")
+    sub.choices["profile"].add_argument("--only", nargs="*", default=None,
+                                        help="restrict to these model names")
+    sub.choices["profile"].add_argument("--out-name", default="profile.json")
     s = sub.choices["sample"]
     s.add_argument("--name", required=True)
     s.add_argument("--ckpt", required=True)

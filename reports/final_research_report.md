@@ -4,7 +4,7 @@
 
 ## Summary
 
-Test macro-F1 by arm (mean ± SD over three seeds): Original 0.750 ± 0.005; A* (128 px) 0.732 ± 0.008; DullRazor 0.698 ± 0.009; **rebuilt diffusion arm Cv2 0.720 ± 0.021**; Creleased (released ckpt, exploratory) 0.713 ± 0.028; earlier diffusion run C (defective trainer, kept as a recorded failure) 0.426 ± 0.013.
+Test macro-F1 by arm (mean ± SD over seeds): Original 0.741 ± 0.024; A* (128 px) 0.728 ± 0.020; **rebuilt diffusion arm Cv2 0.722 ± 0.012**; DullRazor 0.693 ± 0.017 (these four over eight seeds, `reports/stageE_results.md`); Creleased (released ckpt, exploratory, three seeds) 0.713 ± 0.028; earlier diffusion run C (defective trainer, three seeds, kept as a recorded failure) 0.426 ± 0.013. The first three-seed means were Original 0.750, A* 0.732, DullRazor 0.698, Cv2 0.720; the three-seed SDs were misleading (Original 0.005 against 0.024 with eight seeds), and the Stage C paragraph below uses those first three-seed numbers.
 
 The hypotheses were that DM-AHR hair removal improves image fidelity, classification and explanation localization relative to the classical baseline. The results below are reported as measured; a null or negative result is a valid outcome and is not reframed.
 
@@ -16,6 +16,15 @@ The earlier diffusion arm failed because the trainer gave the network an inverte
 - **Image quality (186 synthetic test pairs):** Cv2 29.18 dB / SSIM 0.861, DullRazor 35.73 dB / 0.918, hairy input 22.13 dB / 0.520. The diffusion arm repairs synthetic hair (+7.05 dB) but is 6.55 dB below DullRazor (CI −6.91 to −6.19). The fidelity hypothesis is not supported on these pairs.
 - **Explanation overlap:** against the resolution-matched control A*, Grad-CAM overlap does not differ (+0.004, p 0.43); attention-rollout overlap is higher by +0.024 (Holm p below 0.0001), but that interval leaves out seed-to-seed variation and Cv2 exceeds A* in only two of three seeds, so it is suggestive.
 - **What is not validated:** the Stage B gate for removing hair from real photographs was **not met** (inside/outside ratio 1.95 and 1.57 against 2.0; follow-up composite rule 0.14 and 0.15 against 0.20). Stage C ran anyway as a recorded deviation (D34). The only support for removal on photographs is an agent-reviewed look at 12 dense-hair validation images (nearly all hair gone, lesions intact, fine texture lost at 128 px) and a ground-truth test on pasted real strands.
+
+### Stage E update (response to an independent review; `reports/stageE_results.md`, decision D38)
+
+- **Pooled over eight seeds** with a two-level bootstrap (lesion groups and seeds): only Original over DullRazor is established (macro-F1 difference +0.048, 95% CI +0.012 to +0.085, Holm p 0.008). Original against Cv2 +0.019 (CI −0.013 to +0.054, Holm p 0.50), DullRazor against Cv2 −0.029 (CI −0.059 to +0.002, Holm p 0.19), Cv2 against A* −0.006 (CI −0.034 to +0.021, Holm p 0.67). All Cv2 rows are labelled exploratory, because Cv2 was designed after the Stage B gate failed. Per-image log-loss: no comparison is established. These pooled numbers supersede the Cv2 rows of the Stage C paragraph above.
+- **The study cannot resolve a 0.02 macro-F1 difference.** The minimum detectable difference is 0.04 to 0.05, set by the test sample (about 1,400 lesion groups), not by the seed count.
+- **Standardised effect sizes (`dz`) for macro-F1 in the earlier tables are not interpretable and are not used**; differences with intervals, and a per-image log-loss endpoint, replace them.
+- **On pasted real hair strands with known clean targets, DullRazor beats the diffusion arm on every measure**: PSNR 40.3 against 33.9 dB, strand removal 0.905 against 0.787, and lesion pixels changed where the hair did not cover them 5.9% against 18.3% (96 validation composites). The targets are the cleanest photos, so this does not show how DullRazor behaves on real photos with ink or dense hair, where it changes more of the lesion region than the diffusion arm does (25.1% against 10.9% on 52 validation photos, hair crossing the lesion included).
+- **Condition usage:** every model uses the hairy input at noise levels up to 1000; at 1500 the released model still does and the repaired models barely do. No arm's explanation overlap exceeds the centred-Gaussian baseline (0.644) for either method in any seed.
+- **Real-photo hair removal is still not validated.** A blinded human-review kit exists (`artifacts/review_kit/`) and awaits ratings from a person.
 
 Earlier real-hair finding, unchanged: the released checkpoint and the original DullRazor arm did not cleanly remove real hair (released model left it in place, DullRazor smeared lesions), so the Original-versus-DullRazor gap is confounded by damaged Arm B images.
 

@@ -129,6 +129,20 @@ modal run modal_app.py::image_quality_arm --split test --c-arm Cv2
 modal run modal_app.py::stats_arm --c-arm Cv2
 ```
 
+Stage E (response to an independent review, `reports/prereg_v4_review_response.md`, results in
+`reports/stageE_results.md`): extra seeds, pooled statistics, validation-only checks, review kit.
+
+```bash
+modal run --detach modal_app.py::vit_extra_seeds_driver --arms A,Astar,B,Cv2 --seeds 7,11,17,23,31
+python scripts/53_pooled_analysis.py            # two-level bootstrap over lesion groups and seeds
+python scripts/55_headline_table.py             # pooled headline metrics against reference ranges
+modal run modal_app.py::composite_arms          # DullRazor and Cv2 on pasted real strands, lesion damage
+modal run modal_app.py::condition_usage         # does each model use the hairy input?
+modal run modal_app.py::residual_hair_split --ids-gate <ids> --ids-dense <ids>
+modal run modal_app.py::review_kit_build        # blinded 50-photo kit; rate it, then
+python scripts/54_review_kit.py analyze --dir artifacts/review_kit --ratings <completed csv>
+```
+
 ## Local tests (no GPU, no Modal)
 
 ```bash

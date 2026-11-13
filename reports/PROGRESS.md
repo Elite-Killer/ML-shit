@@ -285,3 +285,9 @@ See decision log D30. The fixed trainer was tested on validation pairs only; the
 - Stage D (`reports/prereg_v3_pasteback.md`, D36): variant `coarse` 31.76 dB / SSIM 0.831 (fails D1, D2); variant `thin` 33.33 dB / 0.846 (passes D1, fails D2 at 0.90). Stop rule applied; no Cv2p image built; no test image or pair read.
 - Pending owner decision: (1) hybrid with classical full-resolution inpainting as the fill, labelled a hybrid; or (2) 256 px diffusion training. See section 11 of the brief.
 - `reports/SECOND_OPINION_BRIEF.md` written for an independent reviewer (D37). The Word/PDF reports, README and final report describe Stages A to C and do not yet mention Stage D.
+
+## 2026-11-13 - Stage E: response to the independent review
+
+- Pre-registered (e3d3ef6), then run: 20 extra-seed ViT evaluations (A, A*, B, Cv2 at seeds 7, 11, 17, 23, 31), pooled two-level-bootstrap analysis, composite/real-photo/condition-usage/residual-hair checks, human-review kit. Results `reports/stageE_results.md`, decision D38.
+- Eight-seed macro-F1: A 0.741, A* 0.728, Cv2 0.722, B 0.693; only A over B established; minimum detectable difference 0.04 to 0.05.
+- Open: human ratings of `artifacts/review_kit/` (needs a person). Real-photo hair removal remains unvalidated.

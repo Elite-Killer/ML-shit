@@ -484,3 +484,10 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
 - Stop rule applied: no Cv2p image was built for real photos or test pairs, no ViT was trained, no test image or test pair was read.
 - Cause (validation reading): the 128 px fill does not match local texture at the seam at full resolution. Next options are listed in the prereg (hybrid with classical inpainting, or higher-resolution diffusion); both are the owner's call.
 - Both variants are exploratory (designed after the Stage C test results were seen). The grid searches used validation data only; two rounds of tuning on validation add some risk of fitting to it, which is another reason a third round waits for the owner.
+
+## D37 - D21 follow-up, second-opinion brief, and a correction to a statement made to the owner
+
+- D21 said the first test scoring of Arm C is void as an independent look if C is repaired. Cv2 is a different frozen model, not a re-score of C, but the same 186 test pairs have now been scored for B, C, Creleased and Cv2. The brief (`reports/SECOND_OPINION_BRIEF.md`, section 7) states this as a repeated look.
+- The brief was produced for an independent reviewer: hand-written template `reports/second_opinion_brief.template.md` plus tables generated from `artifacts/` by `scripts/49_second_opinion_brief.py`.
+- Correction: I told the owner that high-noise epsilon error "stayed flat between 20k and 50k". The profile (12 pairs, one draw) shows t=1500 falling from 0.0098 to 0.0086 and t=1900 rising from 0.0098 to 0.0101. More training is neither supported nor ruled out.
+- New observation recorded in the brief (W8): Grad-CAM overlap for Arm A varies by seed (0.223, 0.439, 0.426), as much as the differences between arms, and the bootstrap intervals average seeds first.

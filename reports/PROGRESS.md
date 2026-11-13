@@ -279,3 +279,9 @@ See decision log D30. The fixed trainer was tested on validation pairs only; the
 - Stage C: Cv2 sampled once (8,993 images + 186 test pairs), three ViT seeds trained and evaluated once, statistics with the A* control. Macro-F1 0.720 ± 0.021, inconclusive against A, B and A*; PSNR 6.55 dB below DullRazor on synthetic pairs. See D35 and `reports/stageC_results.md`.
 - Reports updated: final report, client summary, Results_Report and Code_Guide_Report (docx and pdf), README, CODE_GUIDE. Inventory extended with `scripts/47_inventory_append.py`.
 - Open items: none required by the protocol. Optional next step (client decision): higher-resolution model or paste-back of original pixels outside the hair, and more than three seeds.
+
+## 2026-11-13 - Stage D (full-resolution paste-back) failed its validation gates; second-opinion brief written
+
+- Stage D (`reports/prereg_v3_pasteback.md`, D36): variant `coarse` 31.76 dB / SSIM 0.831 (fails D1, D2); variant `thin` 33.33 dB / 0.846 (passes D1, fails D2 at 0.90). Stop rule applied; no Cv2p image built; no test image or pair read.
+- Pending owner decision: (1) hybrid with classical full-resolution inpainting as the fill, labelled a hybrid; or (2) 256 px diffusion training. See section 11 of the brief.
+- `reports/SECOND_OPINION_BRIEF.md` written for an independent reviewer (D37). The Word/PDF reports, README and final report describe Stages A to C and do not yet mention Stage D.

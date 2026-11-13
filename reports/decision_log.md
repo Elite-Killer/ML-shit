@@ -454,3 +454,9 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
 - Added `reports/client_summary.md`, a plain-English one-page summary.
 - Added a compute addendum to `reports/compute_plan.md`; the run registry under-records today's jobs.
 - Not done: Arm B was not rebuilt (about $2 to $3, optional). No test pair was scored for any retrained model.
+
+## D33 - Stage B harvest: config lookup fix and a minimum layer size (agent-reviewed)
+
+- The first Modal harvest run failed on a missing config path; the fix reads `configs/hair_screen.json` (hash-checked, equal to the frozen config).
+- Reviewing the full harvest, small-area layers held most of the contamination (bubble rim, lesion dots, ink), so composites use only layers of at least 0.4% harvested area. The rule came from looking at 24 random and 12 densest layers, all from train or validation images. It is not validated and the review is agent-reviewed, not expert-reviewed.
+- `scripts/43_harvest_review.py` regenerates the review sheets. Test pairs and test images were not read.

@@ -46,6 +46,8 @@ def test_train_on_composites_writes_manifest_and_snapshots(tmp_path):
                          "hair_coverage": 0.09})
     csv = tmp_path / "scr.csv"
     pd.DataFrame(rows).to_csv(csv, index=False)
+    stats = pd.DataFrame({"image_id": [p.stem for p in lay.glob("*.png")], "fraction": 0.01})
+    stats.to_csv(lay / "summary.csv", index=False)
     tr, va = build_datasets(csv, img, lay, size=SIZE, val_length=3)
     out = tmp_path / "out"
     res = train(_cfg(), None, None, out, device="cpu", max_iterations=6,

@@ -211,16 +211,18 @@ def build() -> Path:
                   f"{quality['C_ssim'].mean():.3f} ± {quality['C_ssim'].std():.3f}"])
     table(doc, ["Condition", "PSNR (dB) mean ± SD", "SSIM mean ± SD"],
           qrows, widths=[1.9, 2.1, 2.1], align_right_from=1)
-    callout(doc, "Why Arm C scores below the untouched input — diagnosed",
-            "A diagnosis on validation pairs separates the two candidate causes. A hairless "
-            "reference round-trips through the same inference path at PSNR 34.6 / SSIM 0.990, and "
-            "the released DM-AHR checkpoint reaches PSNR 26.8 / SSIM 0.684 through that path — "
-            "above the hairy-input floor of 22.1. Our checkpoint reaches PSNR 15.0 / SSIM 0.079, "
-            "below the floor. The adapter is sound; the checkpoint is undertrained. Its output is "
-            "not over-smoothed: it carries roughly 15× the reference's high-frequency energy with "
-            "only a modest drop in global contrast, which is what a model that has not learned the "
-            "mapping looks like. It is labelled an under-resourced ablation throughout and is not "
-            "presented as DM-AHR at published settings. See reports/arm_c_diagnosis.md.",
+    callout(doc, "Why Arm C scores below the untouched input — a training-script defect",
+            "An earlier version of this report called the checkpoint undertrained; that "
+            "diagnosis is retracted. Our training script fed the network t/T as the noise "
+            "level while the sampler feeds sqrt(alphas_cumprod_prev), and the two run in "
+            "opposite directions. On 50 validation pairs the released checkpoint prefers the "
+            "sampler's encoding at every timestep tested (2.9× to 20.5× lower error) and ours "
+            "prefers t/T (about 10× lower), so more iterations of the old script could not have "
+            "fixed it. Arm C as reported measures a defective training run and says nothing "
+            "about DM-AHR as published. The script is now fixed; a retrain on validation pairs "
+            "still failed full 2,000-step sampling (14.96 dB against a 21.30 dB hairy-input "
+            "floor, 24 pairs) and was stopped on cost at 56,300 of a planned 100,000 iterations. "
+            "See reports/oneshot_diagnostic_report.md.",
             fill="FDF3ED", bar="C05A33")
 
     h1(doc, "4. Explainability")
@@ -309,7 +311,8 @@ def build() -> Path:
     bullet(doc, f"PSNR: {verdict(psnr)}. SSIM: {verdict(ssim)}. H1 is not supported by these "
                 f"data. Arm C's SSIM is near-constant across all {len(c_ssim)} pairs "
                 f"({c_ssim.mean():.3f} ± {c_ssim.std():.3f}, with "
-                f"{int((c_ssim < 0.15).sum())} below 0.15), which fits an undertrained model. "
+                f"{int((c_ssim < 0.15).sum())} below 0.15), which is what the inverted "
+                "noise-level signal in our training script produces. "
                 "The released checkpoint was then scored through the same adapter (Creleased): "
                 "it clears the hairy-input floor by 4.95 dB but sits 8.66 dB below classical "
                 "inpainting, so H1 is now tested for DM-AHR and is not supported.")
@@ -336,12 +339,13 @@ def build() -> Path:
 
     h1(doc, "7. Limitations")
     for lead, txt in [
-        ("Arm C is under-resourced, and the cause is diagnosed — ",
-         "It ran 20,000 training iterations (the upstream config's n_iter is 660,000 and the "
-         "released checkpoint is named I725000_E1083), 1,000 sampling steps against 2,000, and "
-         "128 px upsampled to 224. A hairless reference round-trips through the same inference "
-         "path at PSNR 34.6 / SSIM 0.990, so the adapter is sound and the checkpoint is "
-         "undertrained. Its results describe that model, not the published method."),
+        ("Arm C is a failed replication, caused by a training-script defect — ",
+         "Our script gave the network an inverted noise-level signal (t/T instead of the "
+         "sampler's sqrt(alphas_cumprod_prev)), so the model ran 20,000 iterations learning the "
+         "wrong mapping; it was also sampled at 1,000 steps against 2,000 and upsampled from "
+         "128 px to 224. The upstream config's n_iter is 660,000 and the released checkpoint is "
+         "named I725000_E1083. The fixed script did not reach usable sampling at the budgets "
+         "tried. Arm C's results describe that defective run, not the published method."),
         ("Creleased is exploratory, not pre-registered — ",
          "It uses the authors' released checkpoint at a 25-step respaced schedule, a deviation "
          "from the paper's 2,000 steps, and its classifier was trained on our budget rather than "

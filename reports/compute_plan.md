@@ -95,3 +95,7 @@ The run registry under-records this work: the evaluation jobs wrote 0 seconds an
 | Estimated cost | about $5 | at $2.5 per GPU-hour, price unverified |
 
 CPU-only diagnostics ran on the development sandbox and are not billed to Modal. The 20,000 to 100,000 plan was cut at 56,300 iterations, so the planned 1.9 GPU-hours were not fully spent.
+
+## Addendum: Stages B and C (rebuilt diffusion arm)
+
+Measured on one A100-80GB unless noted: strand harvest 125 s on CPU; fine-tune 682 s (20,000 iterations, one preemption resumed from the 9,000 snapshot); validation evaluations about 5 min in total; Cv2 sampling in four containers of 356 to 601 s plus 67 s for the 186 test pairs; three ViT trainings of 452 to 553 s each plus 47 to 165 s of evaluation and explanation. About 1.3 GPU-hours in total. Modal prices were not verified; at an assumed $2.5 to $3.5 per hour that is roughly $3 to $5. No spend cap was set by the owner (the provisional `max_spend_usd` is in `configs/protocol.json`).

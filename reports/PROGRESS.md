@@ -271,3 +271,11 @@ defect. Any retraining must start from scratch with the fixed trainer.**
 ## 2026-11-13 - Arm C retrain stopped; reports corrected
 
 See decision log D30. The fixed trainer was tested on validation pairs only; the 100,000-iteration continuation was stopped at 56,300. The retracted "undertrained" diagnosis was removed from the final report, Word reports, PDFs, code guide and README. Deliverable gates 8 of 8 and acceptance 14 of 14 pass on the Modal volume. The 186 test pairs were not touched.
+
+## 2026-11-13 - Rebuilt diffusion arm (Cv2): Stages A, B, C complete
+
+- Stage A: partial-noise sampler passes on validation pairs (+9 dB at t0 600 and 1000); the positive control missed its bar twice and is recorded as such.
+- Stage B: real strands harvested from train/validation photos (1,893 usable layers), fine-tune of 20,000 iterations. The pre-registered gate was **not met** (ratio 1.95 and 1.57 against 2.0; composite rule +0.14 and +0.15 against +0.20). Dense-hair validation sheets show removal (agent-reviewed). See D33, D34.
+- Stage C: Cv2 sampled once (8,993 images + 186 test pairs), three ViT seeds trained and evaluated once, statistics with the A* control. Macro-F1 0.720 ± 0.021, inconclusive against A, B and A*; PSNR 6.55 dB below DullRazor on synthetic pairs. See D35 and `reports/stageC_results.md`.
+- Reports updated: final report, client summary, Results_Report and Code_Guide_Report (docx and pdf), README, CODE_GUIDE. Inventory extended with `scripts/47_inventory_append.py`.
+- Open items: none required by the protocol. Optional next step (client decision): higher-resolution model or paste-back of original pixels outside the hair, and more than three seeds.

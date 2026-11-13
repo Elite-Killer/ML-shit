@@ -21,7 +21,8 @@ image-processing hair removal, or than leaving the hair in?
 |---|---|---|
 | **A** | original image | baseline: no hair removal |
 | **B** | DullRazor-style morphological detection + Telea inpainting | classical hair removal |
-| **C** | DM-AHR conditional diffusion inpainting | generative hair removal |
+| **C** | first diffusion run (defective trainer; recorded failure) | generative hair removal, failed |
+| **Cv2** | rebuilt diffusion hair removal (Phase 14) | generative hair removal |
 | **A\*** | original, bicubic 128 px round-trip | control for Arm C's resolution change |
 
 **Data.** HAM10000, 7 diagnostic classes, split 70/15/15 **by lesion** so one lesion never appears
@@ -116,7 +117,8 @@ Four input conditions, everything else held identical:
 |---|---|---|
 | **A** | the original image | baseline: no hair removal |
 | **B** | DullRazor-style morphological detection + Telea inpainting | classical hair removal |
-| **C** | DM-AHR conditional diffusion inpainting | generative hair removal |
+| **C** | first diffusion run (defective trainer; recorded failure) | generative hair removal, failed |
+| **Cv2** | rebuilt diffusion hair removal (Phase 14) | generative hair removal |
 | **A\*** | the original passed through a 128 px round-trip | Arm C's resolution change, alone |
 
 Arm A\* exists because DM-AHR works natively at 128 px while the ViT expects 224. Without it, a
@@ -328,6 +330,33 @@ acceptance criteria.
 marked **PENDING** because the dataset is Kaggle-gated and no credentials were available.
 
 ---
+
+### Phase 14 — Rebuilt diffusion arm Cv2 (Stages A, B and C)
+
+Arm C above was made with a trainer that gave the network an inverted noise-level signal; it stays in
+the record as a failed run. The rebuilt arm Cv2 is documented in `reports/prereg_v2_diffusion.md`
+(plan, results, deviations) and `reports/protocol_addendum_stageC.md` (what was frozen before the test
+split was used). In code:
+
+- `src/dm_ahr_vit/diffusion/train.py` mirrors upstream's loss and noise-level convention; contract
+  tests are in `tests/test_noise_level_convention.py` and `tests/test_trainer_sampler_contract.py`.
+- `respaced_super_resolution(..., start_t=600)` in `src/dm_ahr_vit/diffusion/dmahr_adapter.py` starts
+  the strided DDIM chain from the noised input instead of pure noise (Stage A; `scripts/38_partial_noise_eval.py`).
+- `scripts/40_harvest_hair.py` and `src/dm_ahr_vit/hair/harvest.py` cut thin, long, dark hair strands
+  out of train and validation photos (never test). The frozen screening config
+  (`configs/hair_screen.json`, hash-checked by `load_hair_screen_config`) supplies the detector.
+  `scripts/43_harvest_review.py` writes the contact sheets used to review the harvest.
+- `src/dm_ahr_vit/data/hair_composite.py` pastes harvested strands onto clean train photos on the fly;
+  `scripts/04_dmahr_train.py --composite --warm-start <ckpt>` fine-tunes on them.
+- Validation-only checks: `scripts/37_real_hair_check.py` (detector ratio on real photos),
+  `scripts/45_composite_eval.py` (ground truth on pasted strands), `scripts/46_dense_hair_sheet.py`.
+- Stage C: `scripts/05_dmahr_sample.py --arm-name Cv2 --respaced --start-t 600`, `05b_fill_c_passthrough.py
+  --arm-name Cv2`, then `06/07/08` with `--arm Cv2`, `07b_image_quality.py --c-arm Cv2` and
+  `09_stats.py --c-arm Cv2` (outputs carry a `_Cv2` suffix). Modal drivers are in `modal_app.py`
+  (`cv2_sample_driver`, `vit_arm_driver`, `stats_arm`).
+
+Honest status: the pre-registered real-photo gate for Stage B was not met (decision D34) and Stage C was
+run anyway as a recorded deviation; read `reports/stageC_results.md` for what that does and does not show.
 
 ## 5. What was actually used
 | Element | What was used | Where it is recorded |

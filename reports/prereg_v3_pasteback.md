@@ -59,3 +59,25 @@ Reading D3 with care: the detector also fires on lesion texture, which paste-bac
 ## Cost
 
 CPU only for parameter selection, building and statistics; three ViT trainings of about 8 to 9 minutes each on A100-80GB (measured in Stage C). Roughly 0.6 GPU-hours. Modal prices unverified.
+
+## Result of the first parameter search (variant `coarse`, validation only, `artifacts/logs/stageD_val_tuning.json`)
+
+Baselines on the 182 validation pairs: hairy input 22.08 dB / 0.518, Cv2 alone 29.02 dB / 0.858, DullRazor 35.74 dB / 0.915.
+
+Best setting (tau 8, dilate 1, refine on): **31.76 dB, SSIM 0.831**, replaced area 33% of the image. **Gate D1 fails** (needs 32.02 dB, short by 0.26 dB) and **gate D2 fails** (needs 0.90). By the rule above I stop here: no test image was read, nothing was built for the test split.
+
+What the grid shows (not a new result, a reading of this one):
+- PSNR falls monotonically as `tau` rises (best per tau: 31.78, 31.41, 30.49, 29.38 dB for tau 8, 16, 24, 32) and the best setting sits at the grid's lowest value.
+- Turning `refine` on or off moves PSNR by at most 0.14 dB. The frozen detector mask is dilated (5x5 kernel, 2 iterations), so it is wider than the flagged region and does not tighten it.
+- Every setting replaces a large area because one 128 px pixel covers about 4.7 x 3.5 full-resolution pixels. The blurry upsampled fill therefore covers a band around each strand, which costs SSIM; DullRazor, with a tighter mask and local inpainting, keeps more texture.
+
+## Variant `thin` (written after the `coarse` failure, before it is run; same bars)
+
+One change: the full-resolution mask is the **thin** dark-hair response (black-hat response of the frozen detector above a threshold `T`, no component filter, no detector dilation), grown by `grow` px, and intersected with the diffusion-flagged region. The diffusion model then acts as a veto (it leaves lesions and ink alone, so those pixels are not flagged) and supplies the fill; the thin mask keeps the replaced band narrow. Everything else is as above.
+
+- Grid: `tau` in {2, 4, 8}, `dilate` in {1, 2}, `T` in {18, 30} (18 is the frozen screening threshold), `grow` in {1, 2, 3}: 36 settings. Same selection rule.
+- Gates D1, D2, D3, D4, D5 are **unchanged**, with the same numbers. One gate is added, because the purpose of the hybrid is to avoid DullRazor's lesion damage:
+  - **D6**: on the validation real-hair photos that have a lesion mask (40 + 12 ids), the mean fraction of lesion pixels changed by more than 10 gray levels in any channel is not larger for Cv2p than for DullRazor. Lesion masks are only read for validation ids; a check refuses any id outside the validation split.
+- If `thin` also fails a gate, I stop again and report; no further variants are run before the owner has seen the numbers.
+- Status: still exploratory; the `coarse` result stays in the record as a failed variant.
+

@@ -236,3 +236,28 @@ were both scored on one-step x0 reconstruction at t = 50, 200, 500, 1000, 1500,
 Report: `reports/oneshot_diagnostic_report.md`. Data:
 `artifacts/logs/oneshot_diagnostic.json`.
 
+### Correction: the diagnostic found a trainer defect, so the answer is no
+
+An independent review challenged the "yes" conclusion. Following it up found a
+real defect, and the answer is now **no**.
+
+- The trainer fed the U-Net `t / num_timesteps` as the noise level. The sampler
+  feeds `sqrt_alphas_cumprod_prev[t+1]`. The first increases with `t`, the second
+  decreases: the encodings are inverted, not merely different.
+- Measured epsilon-error under both encodings: the released checkpoint is 2.9x
+  to 20.5x better under the sampler encoding at every timestep; ours is about
+  10x better under `t/T` at every timestep. `artifacts/logs/noise_convention_check.json`.
+- Zeroing the conditioning image changes the released model's error by 3.3x to
+  4.8x, ours by 0.97x to 1.8x. Ours barely uses the hair mask.
+- Fixed `src/dm_ahr_vit/diffusion/train.py` to mirror upstream `p_losses`, added
+  `tests/test_noise_level_convention.py` (32 tests pass), and fixed
+  `PairedDataset` to re-root manifest paths so training runs on any volume.
+- Verified the fixed trainer runs: overfit job completed 500 iterations, loss
+  0.185 to 0.082, checkpoint saved.
+- Earlier report errors corrected: the 22.11 dB floor was applied at every
+  timestep when the correct per-t baseline at t=50 is 28.1 dB, and the
+  "loop amplification" comparison has been withdrawn.
+
+**Consequence: training to 660,000 on the old trainer would have reproduced the
+defect. Any retraining must start from scratch with the fixed trainer.**
+

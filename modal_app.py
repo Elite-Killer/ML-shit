@@ -417,6 +417,12 @@ def oneshot_diagnostic(pairs: int = 50):
     return _run("25_oneshot_diagnostic.py", ["--pairs", str(pairs)])
 
 
+@app.function(image=image, gpu="A100-80GB", timeout=3600, volumes={"/vol": vol})
+def convention_check(pairs: int = 50):
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+    return _run("26_convention_check.py", ["--pairs", str(pairs)])
+
+
 @app.function(image=image, cpu=8, memory=32768, timeout=7200, volumes={"/vol": vol})
 def image_quality(split: str = "test"):
     return _run("07b_image_quality.py", ["--split", split])

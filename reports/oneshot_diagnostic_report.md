@@ -1,157 +1,159 @@
-# One-step reconstruction diagnostic: does more training explain Arm C?
+# Arm C: does more training explain the failure?
 
-**Answer: yes for image quality, no for your result.** Training longer should
-improve Arm C substantially, but it will not change the finding, because the
-authors' own fully-trained model already caps at the baseline.
+**Answer: no. Do not train longer until the trainer is fixed. The trainer feeds
+the U-Net a different noise-level encoding from the one the sampler uses, and the
+two are inverted.**
 
-Evidence and reasoning below. Every number traces to
-`artifacts/logs/oneshot_diagnostic.json`, produced by
-`scripts/25_oneshot_diagnostic.py` on 100 validation pairs.
+This supersedes an earlier version of this report that answered "yes for image
+quality". That answer was wrong, for the reasons in section 6.
 
-## What was measured
+Data: `artifacts/logs/oneshot_diagnostic.json` and
+`artifacts/logs/noise_convention_check.json`. Scripts:
+`scripts/25_oneshot_diagnostic.py`, `scripts/26_convention_check.py`. Validation
+pairs only; the test set was not read.
 
-The question was whether Arm C failed because the weights never learned the
-mapping, or because the sampling loop is broken. A sampling loop can only work
-if the model can denoise correctly at a single step, so I tested exactly that.
+## 1. The defect
 
-For each checkpoint and timestep `t`: take a clean hairless reference `x0`,
-noise it with a fixed epsilon to get `x_t`, ask the model to predict that
-epsilon, and recover `x0` in one step. This bypasses the sampling loop entirely.
-It uses the same conditioning arrangement and the same noise-level embedding as
-the upstream sampler, verified line by line against
-`third_party/dmahr/model/sr3_modules/diffusion.py`.
+The U-Net receives a scalar describing how noisy the input is.
+`NoiseLevelEncoder` (`third_party/dmahr/model/sr3_modules/unet.py`, line 23)
+scales a frequency ramp by that scalar, so its meaning is fixed by what the
+caller passes.
 
-Single-step reconstruction from heavy noise is ill-posed, so absolute values at
-high `t` are not meaningful on their own. What matters is the comparison between
-checkpoints at the same `t`, and whether either beats the do-nothing floor.
+- **Sampler** (`GaussianDiffusion.p_sample`, line 154) passes
+  `sqrt_alphas_cumprod_prev[t+1]`. It *decreases* with `t`: 0.997 at t=50,
+  0.059 at t=1500. High value means nearly clean.
+- **Our trainer**, before this fix, passed `t / num_timesteps`. It *increases*
+  with `t`: 0.025 at t=50, 0.750 at t=1500. High value meant maximum noise.
 
-Validation pairs only. The test set was not read.
+The two signals are not merely different, they are inverted. The model was
+trained to read a small number as "almost no noise" and is asked at inference to
+read a small number as "almost pure noise".
 
-## Results
-
-One-step x0 reconstruction PSNR in dB, 100 validation pairs, identical noise
-seed for both checkpoints.
-
-| t | Released (725k) | Ours (20k) | Gap |
-|---:|---:|---:|---:|
-| 50 | 38.56 | 31.54 | 7.02 |
-| 200 | 33.90 | 24.58 | 9.32 |
-| 500 | 31.00 | 23.44 | 7.56 |
-| 1000 | 29.51 | 21.38 | 8.13 |
-| 1500 | 25.38 | 8.25 | 17.13 |
-| 1900 | 14.61 | 6.36 | 8.26 |
-
-SSIM at the same points:
-
-| t | Released | Ours |
+| t | Our trainer sent | Sampler sent |
 |---:|---:|---:|
-| 50 | 0.931 | 0.678 |
-| 200 | 0.856 | 0.307 |
-| 500 | 0.787 | 0.271 |
-| 1000 | 0.737 | 0.289 |
-| 1500 | 0.484 | 0.021 |
-| 1900 | 0.095 | 0.013 |
+| 50 | 0.0250 | 0.9968 |
+| 200 | 0.1000 | 0.9509 |
+| 500 | 0.2500 | 0.7307 |
+| 1000 | 0.5000 | 0.2853 |
+| 1500 | 0.7500 | 0.0594 |
+| 1900 | 0.9500 | 0.0108 |
 
-The do-nothing floor, meaning the unprocessed hairy image scored against the
-same hairless reference, is **22.11 dB / 0.519 SSIM**.
+Upstream `p_losses` (line 221) passes `sqrt_alphas_cumprod_prev` sampled
+continuously between `t-1` and `t`, per sample in the batch. Our trainer now does
+the same, and `tests/test_noise_level_convention.py` pins it.
 
-## What this shows
+## 2. Empirical confirmation
 
-**1. The sampling loop is not the defect.** The released checkpoint reaches
-26.80 dB through the full loop using the same adapter, and a hairless reference
-round-trips through it at 34.62 dB. Both facts were established earlier and
-stand. A broken loop cannot produce either.
+For each checkpoint and timestep we measured epsilon-prediction error under both
+encodings, on 50 validation pairs with a fixed noise draw. A checkpoint should
+show lower error under the encoding it was trained with. Ratio is
+`t_over_T error / sampler error`; above 1 means the sampler encoding wins.
 
-**2. Our model is not untrained. It is under-trained.** At `t=50` our checkpoint
-reaches 31.54 dB, which is 9.4 dB above the do-nothing floor. It has learned to
-denoise. This rules out the strongest version of the "never learned the mapping"
-hypothesis that an earlier report implied.
+| Checkpoint | t=200 | t=500 | t=1000 | t=1500 | Prefers |
+|---|---:|---:|---:|---:|---|
+| Released | 4.0x | 2.9x | 3.9x | 20.5x | sampler at every t |
+| Ours | 0.1x | 0.1x | 0.2x | 0.1x | **`t/T` at every t** |
 
-**3. The deficit is uniform across noise levels, which is the signature of
-incomplete convergence.** Our checkpoint is behind the released one at every
-single timestep, by 7 to 9.3 dB across the low-to-mid range. It is not failing at
-one specific stage, which is what a structural bug would produce. It is
-uniformly less converged, which is what fewer iterations produces.
+Our checkpoint is roughly 10x better under the encoding the sampler never uses.
+That is not noise, and it is not a training-budget effect.
 
-**4. Our model has learned denoising better than it has learned the
-conditioning.** Zeroing the hairy conditioning image changes our output by only
-0.0234 at `t=200`, against 0.1076 for the released model. At `t=200` our output
-is actually marginally *better* with the condition removed (24.72 versus 24.58).
-That is a model that is reconstructing generic skin texture and largely ignoring
-the hair mask it is supposed to be conditioning on.
+This reproduces, from committed source, what
+`artifacts/logs/arm_c_v2_noise_mse.json` claimed and what an earlier version of
+this report wrongly set aside because its generating script was missing.
 
-**5. The sampling loop amplifies our model's weakness at high noise.** The
-released model converts 38.56 dB single-step quality into 26.80 dB through the
-full loop, a loss of 11.8 dB. Ours converts 31.54 into 14.99, a loss of 16.5 dB.
-The extra loss is where ours is weakest: at `t=1500` it is 17.1 dB behind the
-released model, and a sampling loop spends many of its steps in that region. So
-the loop is not broken, but it does propagate the high-noise deficit.
+## 3. One-step reconstruction, with a correct baseline
 
-This fourth point is the one that complicates a simple "just train longer"
-answer. Learning a conditional mapping is exactly the part that requires many
-iterations, so more training is the most likely fix, but it is also the part
-where a training-setup problem would show up. I cannot separate those two from
-this evidence alone.
+One-step x0 reconstruction PSNR on 100 validation pairs, fixed noise seed, same
+conditioning arrangement and noise-level embedding as the sampler. The
+`noisy input` column is the exact analytic baseline `10*log10(4/(1-alpha^2))`:
+what you get by returning the noisy image untouched. It is the floor that matters
+at each timestep.
 
-## Why this supports "yes" on more training
+| t | Noisy input | Ours | Released | Ours vs floor |
+|---:|---:|---:|---:|---:|
+| 50 | 28.1 | 31.54 | 38.56 | +3.4 |
+| 200 | 16.2 | 24.58 | 33.90 | +8.3 |
+| 500 | 9.3 | 23.44 | 31.00 | +14.1 |
+| 1000 | 6.4 | 21.38 | 29.51 | +15.0 |
+| 1500 | 6.0 | 8.25 | 25.38 | +2.2 |
+| 1900 | 6.0 | 6.36 | 14.61 | +0.3 |
 
-The model learns, it is uniformly behind at every noise level, and the released
-checkpoint proves this architecture and this code path reach good quality. Those
-three facts together make incomplete convergence the most likely explanation,
-and convergence is what iterations buy.
+**An earlier version used 22.11 dB as the floor at every t. That was wrong.** At
+low `t` the hairless reference is barely perturbed, so returning it untouched
+already scores 28.1 dB. Our model is only 3.4 dB above that at t=50, not 9.4 dB.
 
-Expected size of the gain: our one-step reconstruction at low noise is 7 dB
-behind the released model. The full-loop gap is 12 dB (26.80 versus 14.99). If
-training closes most of the one-step deficit, most of the loop deficit should
-close with it. The high-noise rows are the clearest target, because that is
-where ours is furthest behind and where the loop spends much of its time.
+At high `t` the error runs the other way: noise dominates, so the only usable
+information is the conditioning image. Copying the hairy input scores 22.11 dB
+against the reference. The released model beats that at t=1500 (25.38). Ours
+scores 8.25, far below copying. **That is a conditioning failure, not a budget
+effect.**
 
-## Why this still supports "no" on changing your result
+## 4. Condition usage
 
-The released checkpoint is the authors' own fully-trained model at 725,000
-iterations. It scores macro-F1 0.713. That is:
+Zeroing the conditioning image, epsilon-error ratio (zeroed / with condition).
+Above 1 means the model relies on the condition.
 
-- statistically tied with classical DullRazor: difference −0.015, 95% CI −0.049
-  to +0.019, Holm p = 0.40;
-- below original images: difference +0.038, 95% CI +0.005 to +0.071, Holm
-  p = 0.048, though with a negligible effect size of Cohen's dz 0.05.
+| Checkpoint | t=200 | t=500 | t=1000 | t=1500 |
+|---|---:|---:|---:|---:|
+| Released | 4.28x | 4.13x | 4.83x | 3.34x |
+| Ours | 0.97x | 1.05x | 1.79x | 1.23x |
 
-So the realistic outcome of training our model to full budget is Arm C moving
-from 0.426 to roughly 0.70, which matches classical removal and remains behind
-the untouched baseline of 0.750. A better-trained diffusion arm does not make
-diffusion hair removal win.
+Our model barely uses the hair image, and at t=200 removing it slightly *helps*. A
+model that denoises but ignores its condition produces output unrelated to the
+input, which matches the measured SSIM of 0.074 and the SSIM 0.287 on the failed
+8-pair overfit test.
 
-## Recommendation
+## 5. What this means
 
-If you need the diffusion arm at published budget for the write-up, the training
-is justified: it removes the "under-trained" caveat and makes the arm a fair
-test. Expect Arm C around 0.70, not above 0.750.
+The failure is consistent with the encoding defect, and the encoding defect
+explains all four observations that a budget story could not: output uncorrelated
+with the input, near-zero condition usage, failure to overfit 8 pairs, and
+epsilon-error that is far lower under the wrong encoding.
 
-If the goal is a result that beats baseline, do not spend it. Nothing in this
-evidence, or in the authors' own results, supports that outcome.
+**More iterations on the old trainer would have reproduced the defect**, at any
+budget. That is why the answer is no.
 
-The intermediate option is the one I would take: train to 100,000 iterations,
-save checkpoints, and re-run this same single-step test plus a 50-pair sample.
-If the one-step gap at `t=50` and `t=200` closes materially, continue to full
-budget. If it does not move, stop and report what you have.
+## 6. Corrections to the earlier version of this report
 
-## Limitations of this diagnostic
+- It claimed "uniform deficit across noise levels is the signature of incomplete
+  convergence". Invalid: a wiring bug touching the whole network is also
+  uniform, and the gap was not uniform anyway (17 dB at t=1500).
+- It applied a single 22.11 dB floor at every timestep. Wrong at both ends, as
+  section 3 shows.
+- It argued the sampling loop "amplifies the weakness" by comparing 11.8 dB and
+  16.5 dB loop losses. That compares one-step reconstruction of a lightly noised
+  image against full generation from pure noise, which are different tasks. The
+  argument is withdrawn.
+- It set aside the retrained-variant evidence (lower epsilon-MSE than the
+  released model, yet only 15.7 dB samples) because the script was missing. That
+  evidence is now reproduced by a committed script and is central, not
+  peripheral.
+- Its headline "yes for image quality" was not supported. The correct answer is
+  no until the trainer is fixed.
 
-This test measures single-step reconstruction, not final image quality. A model
-that reconstructs well at one step can still sample poorly, and vice versa.
+## 7. What is still true
 
-Single-step reconstruction from `t=1900` is close to pure noise for both
-checkpoints, so those rows should be read as "both are guessing", not as a
-quality ranking.
+The sampling loop is not broken: the released checkpoint works through it at
+26.80 dB and a hairless round-trip returns 34.62 dB. Our adapter is fine.
 
-Two checkpoints give two points on a curve. This diagnostic strongly implicates
-convergence but cannot measure a learning trajectory, because no intermediate
-checkpoints exist.
+The result ceiling is unchanged. The released checkpoint is the authors' own
+fully-trained model and scores macro-F1 0.713, statistically tied with classical
+DullRazor (difference −0.015, 95% CI −0.049 to +0.019, Holm p = 0.40) and below
+original images (difference +0.038, 95% CI +0.005 to +0.071, Holm p = 0.048,
+Cohen's dz 0.05). That 0.713 carries a seed SD of 0.028, against 0.005 to 0.009
+for the other arms, so treat 0.70 as an estimate, not a tight prediction.
 
-An earlier diagnostic in `artifacts/logs/arm_c_v2_noise_mse.json` reported that
-our checkpoint and the released one prefer different noise-prediction
-conventions. Its generating script is not in the repository, so its "legacy" and
-"upstream" modes cannot be verified from source and I do not rely on it here.
-The one-step test above is the stronger evidence, and it shows our checkpoint
-behaving sensibly under the standard convention, which argues against a
-wholesale convention mismatch.
+## 8. Next step
+
+The trainer is fixed and pinned by tests. Before spending on a long run, do the
+two cheap checks that confirm the correction:
+
+1. Fine-tune the released weights with the fixed trainer for about 1,000
+   iterations. If PSNR collapses from 26.8, the trainer is still wrong.
+2. Train 8 pairs briefly with the condition set to the clean target. This is a
+   copy task and should be learned within a few hundred iterations.
+
+Only after those pass is a 100k run meaningful, checkpointed every 10k, with the
+rule stated in advance: continue to 660k only if the sampler-encoding error drops
+below the `t/T` error, PSNR gains at least 3 dB, and the result clears the
+noisy-input baseline by at least 3 dB.

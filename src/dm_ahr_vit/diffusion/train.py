@@ -13,10 +13,27 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 
 from ..config import save_json
+from ..paths import data_root
 from ..utils import setup_logging
 from .dmahr_adapter import _ensure_path, build_opt, opt_hash
 
 log = setup_logging()
+
+
+def _resolve_manifest_path(path: str) -> Path:
+    """Re-root a recorded modal-volume path onto the current DATA_ROOT.
+
+    Pair manifests were written inside a container, so they hold absolute
+    `/__modal/volumes/<id>/data/...` paths that are void on any other volume.
+    Splitting on the `/data/` marker keeps them usable.
+    """
+    p = Path(path)
+    if p.exists():
+        return p
+    marker = "/data/"
+    if marker in str(p):
+        return data_root() / str(p).split(marker, 1)[1]
+    return p
 
 
 class PairedDataset(Dataset):
@@ -32,13 +49,13 @@ class PairedDataset(Dataset):
     def __getitem__(self, idx: int):
         r = self.pairs.iloc[idx]
         hr = np.asarray(
-            Image.open(r["reference_path"]).convert("RGB").resize(
+            Image.open(_resolve_manifest_path(r["reference_path"])).convert("RGB").resize(
                 (self.size, self.size), Image.Resampling.BICUBIC
             ),
             dtype=np.float32,
         )
         cond = np.asarray(
-            Image.open(r["hairy_path"]).convert("RGB").resize(
+            Image.open(_resolve_manifest_path(r["hairy_path"])).convert("RGB").resize(
                 (self.size, self.size), Image.Resampling.BICUBIC
             ),
             dtype=np.float32,
@@ -65,11 +82,15 @@ def val_loss(net, loader, device: str, timesteps=(200, 800, 1400, 1900)) -> floa
         hr = batch["HR"].to(device)
         cond = batch["SR"].to(device)
         for t in timesteps:
-            t_arr = torch.full((hr.shape[0],), float(t) / net.num_timesteps, device=device)
+            # Upstream encodes the noise level as sqrt(alpha_cumprod_prev), not as
+            # t/T: `NoiseLevelEncoder` multiplies a frequency ramp by this value,
+            # and `p_sample` feeds the same quantity at inference. Using t/T here
+            # trains one encoding and samples with another.
             alpha = net.sqrt_alphas_cumprod_prev[int(t) - 1]
+            level = torch.full((hr.shape[0], 1), float(alpha), device=device)
             noise = torch.randn_like(hr)
             noisy = alpha * hr + (1 - alpha**2) ** 0.5 * noise
-            pred = net.denoise_fn(torch.cat([cond, noisy], dim=1), t_arr)
+            pred = net.denoise_fn(torch.cat([cond, noisy], dim=1), level)
             losses.append(float((pred - noise).abs().mean()))
     net.train()
     return float(np.mean(losses))
@@ -151,11 +172,17 @@ def train(
         hr = batch["HR"].to(device, non_blocking=True)
         cond = batch["SR"].to(device, non_blocking=True)
         t = np.random.randint(1, net.num_timesteps + 1)
-        alpha = net.sqrt_alphas_cumprod_prev[t - 1]
-        t_arr = torch.full((hr.shape[0],), float(t) / net.num_timesteps, device=device)
+        # Continuous noise level per sample, exactly as upstream `p_losses`:
+        # uniform between sqrt(alpha_cumprod_prev) at t-1 and at t.
+        lo = float(net.sqrt_alphas_cumprod_prev[t - 1])
+        hi = float(net.sqrt_alphas_cumprod_prev[t])
+        alpha = torch.tensor(
+            np.random.uniform(lo, hi, size=hr.shape[0]), dtype=hr.dtype, device=device
+        )
+        alpha_4d = alpha.view(-1, 1, 1, 1)
         noise = torch.randn_like(hr)
-        x_noisy = alpha * hr + (1 - alpha**2) ** 0.5 * noise
-        pred = net.denoise_fn(torch.cat([cond, x_noisy], dim=1), t_arr)
+        x_noisy = alpha_4d * hr + (1 - alpha_4d**2) ** 0.5 * noise
+        pred = net.denoise_fn(torch.cat([cond, x_noisy], dim=1), alpha.view(-1, 1))
         loss = (pred - noise).abs().mean()
         opt_g.zero_grad(set_to_none=True)
         loss.backward()

@@ -302,3 +302,35 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
   Conclusions are unchanged: the two saliency methods still disagree, and no
   arm beats the centred-Gaussian prior (0.644 overlap).
 
+## D25 - Arm C trainer used an inverted noise-level encoding
+
+- Finding: the U-Net's `NoiseLevelEncoder` scales a frequency ramp by a scalar
+  noise level. The sampler (`p_sample`, diffusion.py:154) passes
+  `sqrt_alphas_cumprod_prev[t+1]`, which decreases with `t` (0.997 at t=50,
+  0.011 at t=1900). Our trainer passed `t / num_timesteps`, which increases with
+  `t` (0.025 at t=50, 0.950 at t=1900). The two encodings are inverted, so the
+  model was trained to read a small value as "clean" and sampled with a small
+  value meaning "almost pure noise".
+- Evidence: epsilon-prediction error measured under both encodings on 50
+  validation pairs. The released checkpoint is 2.9x to 20.5x better under the
+  sampler encoding at every timestep. Ours is about 10x better under `t/T` at
+  every timestep, the encoding the sampler never uses. See
+  `artifacts/logs/noise_convention_check.json`.
+- Corroborating: zeroing the conditioning image changes the released model's
+  error by 3.3x to 4.8x but ours by only 0.97x to 1.8x, and at t=200 removing
+  the condition slightly helps. A model that ignores its condition produces
+  output unrelated to the input, matching SSIM 0.074 on test and 0.287 on the
+  8-pair overfit attempt.
+- Decision: fix the trainer to mirror upstream `p_losses` exactly - per-sample
+  continuous `sqrt_alphas_cumprod_prev` uniform between `t-1` and `t`, passed as
+  a `(B,1)` tensor. `tests/test_noise_level_convention.py` pins it, so the bug
+  cannot silently return.
+- Consequence for the budget question: **training longer on the old trainer
+  would have reproduced this defect at any iteration count.** The answer to
+  "would more iterations help" is therefore no, until this fix. Any future
+  budget proposal must retrain from scratch with the fixed trainer, not resume
+  the existing checkpoint, whose weights encode the wrong convention.
+- Second defect fixed in the same pass: `PairedDataset` opened manifest paths
+  verbatim, so training failed on any volume other than the one that wrote the
+  manifests. It now re-roots on the `/data/` marker like the rest of the code.
+

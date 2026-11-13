@@ -552,12 +552,13 @@ def cv2_sample_driver(n_shards: int = 4, pairs_split: str = ""):
 
 
 @app.function(image=image, gpu="A100-80GB", timeout=86400, volumes={"/vol": vol})
-def vit_arm_seed(arm: str, seed: int):
-    """Train, evaluate on the locked test split, and explain one arm/seed in one container."""
+def vit_arm_seed(arm: str, seed: int, xai: bool = True):
+    """Train, evaluate on the locked test split, and (optionally) explain one arm/seed."""
     vol.reload()
     _run("06_train_vit.py", ["--arm", arm, "--seed", str(seed)])
     _run("07_eval_vit.py", ["--arm", arm, "--seed", str(seed)])
-    _run("08_xai.py", ["--arm", arm, "--seed", str(seed)])
+    if xai:
+        _run("08_xai.py", ["--arm", arm, "--seed", str(seed)])
     return [arm, seed]
 
 
@@ -566,6 +567,16 @@ def vit_arm_driver(arm: str, seeds: str = "42,123,2026"):
     handles = [vit_arm_seed.spawn(arm, int(s)) for s in seeds.split(",")]
     results = [h.get() for h in handles]
     print("all seeds finished:", results, flush=True)
+    return results
+
+
+@app.function(image=image, cpu=1, memory=2048, timeout=86400, volumes={"/vol": vol})
+def vit_extra_seeds_driver(arms: str = "A,Astar,B,Cv2", seeds: str = "7,11,17,23,31"):
+    """Stage E: extra seeds for the pooled analysis, evaluated once each, no explanation maps."""
+    handles = [vit_arm_seed.spawn(a, int(s), False) for a in arms.split(",")
+               for s in seeds.split(",")]
+    results = [h.get() for h in handles]
+    print("all runs finished:", results, flush=True)
     return results
 
 
@@ -599,6 +610,25 @@ def pasteback_build(target: str, tau: float, dilate: int, refine: bool = True,
     args = ["build", "--target", target, "--tau", str(tau), "--dilate", str(dilate),
             "--thin-T", str(thin_t), "--grow", str(grow)]
     return _run("48_pasteback.py", args + (["--refine"] if refine else []))
+
+
+@app.function(image=image, gpu="A100-80GB", timeout=3600, volumes={"/vol": vol})
+def composite_arms(items: int = 96, commit: str = "unknown"):
+    """Stage E V1: DullRazor and Cv2 on validation composites with lesion-damage metrics."""
+    return _run("50_composite_arms.py", ["--items", str(items), "--commit", commit])
+
+
+@app.function(image=image, gpu="A100-80GB", timeout=3600, volumes={"/vol": vol})
+def condition_usage(pairs: int = 48, commit: str = "unknown"):
+    """Stage E V4: epsilon error with the condition kept, zeroed and shuffled."""
+    return _run("51_condition_usage.py", ["--pairs", str(pairs), "--commit", commit])
+
+
+@app.function(image=image, cpu=8, memory=16384, timeout=3600, volumes={"/vol": vol})
+def residual_hair_split(ids_gate: str, ids_dense: str, n: int = 300, commit: str = "unknown"):
+    """Stage E V2 and V3: lesion change on real validation photos; residual hair by split."""
+    return _run("52_residual_hair_split.py", ["--ids-gate", ids_gate, "--ids-dense", ids_dense,
+                                              "--n", str(n), "--commit", commit])
 
 
 @app.function(image=image, gpu="A100-80GB", timeout=7200, volumes={"/vol": vol})

@@ -474,11 +474,11 @@ def trainer_gates(gate: str = "1"):
 @app.function(image=image, gpu="A100-80GB", timeout=7200, volumes={"/vol": vol})
 def partial_noise_eval(ckpt: str, name: str, tag: str, t0s: str = "600,1000,1500,1999",
                        steps: int = 50, seeds: int = 4, pairs: int = 24,
-                       commit: str = "unknown"):
+                       commit: str = "unknown", offset: int = 0):
     return _run("38_partial_noise_eval.py",
                 ["--ckpt", ckpt, "--name", name, "--tag", tag, "--t0s", t0s,
                  "--steps", str(steps), "--seeds", str(seeds), "--pairs", str(pairs),
-                 "--commit", commit])
+                 "--offset", str(offset), "--commit", commit])
 
 
 @app.function(image=image, gpu="A100-80GB", timeout=7200, volumes={"/vol": vol})

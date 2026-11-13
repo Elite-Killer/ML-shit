@@ -51,6 +51,8 @@ def main() -> int:
     ap.add_argument("--steps", type=int, default=50)
     ap.add_argument("--seeds", type=int, default=4)
     ap.add_argument("--pairs", type=int, default=24)
+    ap.add_argument("--offset", type=int, default=0,
+                    help="skip this many validation pairs, to evaluate on unseen ones")
     ap.add_argument("--tag", required=True)
     ap.add_argument("--commit", default="unknown")
     args = ap.parse_args()
@@ -63,7 +65,8 @@ def main() -> int:
     net = load_model(cfg, ckpt, device="cuda")
 
     pairs = pd.read_csv(manifest_dir() / "synthetic_pairs.csv")
-    val = pairs[pairs["split"] == "val"].head(args.pairs).reset_index(drop=True)
+    val = (pairs[pairs["split"] == "val"].iloc[args.offset:args.offset + args.pairs]
+           .reset_index(drop=True))
     refs, conds = [], []
     for r in val.itertuples(index=False):
         with Image.open(_resolve_manifest_path(r.reference_path)) as fh:

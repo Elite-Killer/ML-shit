@@ -59,3 +59,20 @@ Only if Stage B passes. Estimated cost with strided sampling is a few dollars, n
 
 No spend cap was set by the owner. Stage A costs well under $1. Stages B and C are expected at a few
 dollars each and will be launched only after their gates, with the estimate stated first.
+
+## Stage A, first run (commit 7cd1505, 24 validation pairs, 4 seeds, DDIM 50 steps)
+
+| Model | t0 | PSNR | margin over hairy floor (21.3) | runs below floor | sd of seed means |
+|---|---:|---:|---:|---:|---:|
+| fixed, 50k iterations | 600 | 30.25 | +8.95 | 0% | 0.10 |
+| fixed, 50k iterations | 1000 | 30.55 | +9.25 | 0% | 0.29 |
+| fixed, 50k iterations | 1500 | 26.74 | +5.43 | 13% | 0.64 |
+| fixed, 50k iterations | 1999 (pure noise) | 16.30 | -5.01 | 92% | 0.41 |
+| released (control) | 1000 | 25.68 | +4.38 | 0% | 0.10 |
+| released (control) | 1999 (pure noise) | 23.26 | **+1.96** | 28% | 0.25 |
+
+Artifacts: `artifacts/diagnosis/stageA_*_partial_noise.json` (checkpoint hashes and commit recorded).
+
+**The positive control missed its bar by 0.04 dB.** The pre-registered bar was a margin of at least +2.0 dB for the released model at t0=1999, and it scored +1.96. By my own rule that means the script is not yet validated. The independent evidence points the other way: an earlier, separate check (`artifacts/logs/respacing_check.json`, different code path, 25 pairs) gave the released model 23.23 dB at 25 steps and 24.23 dB at 50 steps, and this run gives 23.26 dB. A 0.04 dB miss on a 24-pair mean is inside what a different pair set changes. I am treating the first run as indicative only.
+
+**Replication, rules fixed before running it.** Same script on 48 validation pairs the first run never saw (pairs 24 to 71, `--offset 24`), for the fixed model at all four t0 and the released model at t0 in 1000 and 1999. The bar is unchanged: released at t0=1999 needs a margin of at least +2.0 dB. If it misses again, Stage A is recorded as not validated by the strict bar. The fixed-model sampler counts as passing only if the pass criteria above hold on both pair sets.

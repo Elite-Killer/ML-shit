@@ -20,6 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from dm_ahr_vit.paths import artifact_dir  # noqa: E402
+from dm_ahr_vit.reporting import stats_text as st  # noqa: E402
+from dm_ahr_vit.reporting import xai_text as xt  # noqa: E402
 
 pre = import_module("13_preprocessing_report")
 h1, h2, body, bullet, table, callout, figure = (
@@ -267,34 +269,33 @@ def build() -> Path:
             fill="FDF3ED", bar="C05A33")
 
     h1(doc, "4. Explainability")
+    x2 = xt.load(logs)
     body(doc,
-         "For every test image, two saliency methods — Grad-CAM on the patch grid and attention "
-         "roll-out — were compared against the released HAM10000 lesion mask. The table reports "
-         "the fraction of the top-20% most salient pixels that fall inside the mask, averaged over "
-         "seeds, with the two chance baselines for context.")
-    agg = (xai.groupby("arm")[["gradcam_overlap20", "rollout_overlap20",
-                               "gradcam_pointing", "rollout_pointing",
-                               "chance_uniform_overlap20",
-                               "chance_gaussian_overlap20"]].mean()
-           .loc[["A", "Astar", "B", "C", "Creleased"]])
-    table(doc, ["Arm", "Grad-CAM overlap", "Roll-out overlap", "Grad-CAM pointing",
-                "Roll-out pointing", "Uniform chance", "Gaussian chance"],
-          [[ARM_LABEL[i], f"{r['gradcam_overlap20']:.3f}", f"{r['rollout_overlap20']:.3f}",
-            f"{r['gradcam_pointing']:.3f}", f"{r['rollout_pointing']:.3f}",
-            f"{r['chance_uniform_overlap20']:.3f}", f"{r['chance_gaussian_overlap20']:.3f}"]
-           for i, r in agg.iterrows()],
-          widths=[1.75, 0.95, 0.95, 0.95, 0.9, 0.85, 0.9], align_right_from=1)
-    body(doc,
-         "Overlap measures spatial alignment with released masks, not clinically correct "
-         "reasoning. Every arm beats uniform chance, but a centred-Gaussian prior scores "
-         "0.644 on overlap and 0.953 on the pointing game, exceeding every arm on both "
-         "measures. No arm therefore beats a trivial attend-to-the-centre baseline, and "
-         "these numbers do not establish that any arm localises lesions better than that "
-         "prior. The masks themselves are single-rater: a dermatologist (Tschandl P) "
-         "created binary masks for all 10,015 images, network-initialised and then "
-         "verified, corrected or replaced by hand in FIJI (Tschandl et al., Nature "
-         "Medicine 2020), so overlap is measured against one tracing, not consensus.",
-         size=9.5, italic=True)
+         "For every test image with a lesion mask (1,502 images), attention rollout and Grad-CAM were "
+         "compared with the released HAM10000 lesion mask after carrying the mask through the same "
+         "resize and centre crop the classifier applies to the image. Grad-CAM uses the output of ln_1 "
+         "in the last encoder block as its primary target; the patch-embedding grid used in the first "
+         "analysis is kept as a labelled sensitivity run. The first analysis compared maps with masks "
+         "that were not in the classifier's frame; it is retained in the repository as the legacy "
+         "analysis and is not used here. Measures:")
+    for line in xt.definitions().split("\n"):
+        bullet(doc, line[2:])
+    body(doc, xt.geometry_sentence(x2) + " " + xt.agreement_sentence(x2), size=9.5)
+    for metric, title in (("recall", "Lesion coverage (recall)"), ("pointing", "Pointing")):
+        head, rows = xt.arm_table(x2, metric)
+        body(doc, f"{title}: mean over seeds, with the seed range, against the chance baselines on the "
+                  "same masks (centred Gaussian, random pixel maps, random patch maps; 100 draws per image) "
+                  "and the model-minus-Gaussian difference with a 95% interval over lesions and seeds.",
+             size=9.5)
+        table(doc, head, rows, widths=[1.35, 1.35, 0.4, 1.05, 0.55, 0.6, 0.6, 1.1], font=7,
+              align_right_from=2)
+        for line in xt.baseline_verdicts(x2, metric):
+            bullet(doc, line)
+    body(doc, xt.strike_summary(x2) + " Overlap measures spatial alignment with released masks, not "
+              "clinically correct reasoning. The masks are single-rater: a dermatologist (Tschandl P) "
+              "created binary masks for all 10,015 images, network-initialised and then verified, "
+              "corrected or replaced by hand in FIJI (Tschandl et al., Nature Medicine 2020), so overlap "
+              "is measured against one tracing, not consensus.", size=9.5, italic=True)
     fig_dir = artifact_dir("reports") / "preprocessing_assets"
     figure(doc, fig_dir / "dmahr.jpg",
            "Figure 1 — Arm C diffusion removal, from the preprocessing report, reproduced here "
@@ -332,13 +333,21 @@ def build() -> Path:
              "is applied within this exploratory family only.", size=9.5, italic=True)
         erows = []
         for r in expl.itertuples():
+            comp_ = str(r.comparison)
+            ll = ""
+            if r.endpoint == "test_macro_f1" and "-" in comp_:
+                a_, b_ = comp_.split("-", 1)
+                d_ = st.logloss_diff(artifact_dir("predictions"), a_, b_)
+                if d_["per_seed"]:
+                    ll = (f"{d_['difference']:+.3f} ({d_['ci_low']:+.3f} to {d_['ci_high']:+.3f}); per-seed "
+                          + ", ".join(f"{v:+.3f}" for v in d_["per_seed"].values()))
             erows.append([r.endpoint, r.comparison, f"{r.difference:+.3f}",
                           f"{r.ci_low:+.3f} to {r.ci_high:+.3f}",
                           f"{r.p_holm:.4f}" if r.p_holm >= 0.0001 else "<0.0001",
-                          f"{r.effect_size_dz:+.3f}", f"{r.n_groups}"])
+                          ll, f"{r.n_groups}"])
         table(doc, ["Endpoint", "Comparison", "Diff.", "95% CI (bootstrap)",
-                    "p (Holm)", "Cohen's dz", "Groups"],
-              erows, widths=[1.35, 1.15, 0.6, 1.25, 0.72, 0.7, 0.55], font=8,
+                    "p (Holm)", "Per-image log-loss difference (a - b; negative favours a)", "Groups"],
+              erows, widths=[1.15, 1.0, 0.55, 1.1, 0.6, 1.9, 0.5], font=7.5,
               align_right_from=2)
 
     h1(doc, "6. What this says about the three hypotheses")
@@ -370,13 +379,19 @@ def build() -> Path:
                 "damage and was not separated from it.")
     body(doc, "H3 — explainability (attention focuses more on lesions after diffusion): ",
          space_after=2)
-    bullet(doc, f"Grad-CAM overlap, A vs C: {verdict(gc)}. Attention roll-out, A vs C: "
-                f"{verdict(ro)}. The methods disagree in direction, but H3 is not supported and "
-                "the measurement is uninformative as specified: a centred-Gaussian prior beats "
-                "every arm on both overlap (0.644) and pointing (0.953), so no arm demonstrates "
-                "lesion localisation beyond a centre bias. That is a limitation of the "
-                "measurement, not a finding about diffusion hair removal, and it must be fixed "
-                "before H3 can be tested.")
+    pl = x2["comp"]
+    pl = pl[(pl["family"] == "planned") & (pl["frame"] == xt.AS_IS) & (pl["metric"] == "recall")]
+    for r in pl.itertuples():
+        bullet(doc, f"{r.a} - {r.b}, {r.method}, lesion coverage: {r.difference:+.3f} (95% CI "
+                    f"{r.ci_low:+.3f} to {r.ci_high:+.3f}; per-seed {r.per_seed_differences}); "
+                    f"{'struck: seed spread exceeds the difference' if r.struck else 'not struck'}.")
+    bullet(doc, "Diffusion versus the others (Cv2 against A, B and A*) is exploratory; see the tables in "
+                "section 4. " + xt.strike_summary(x2))
+    bullet(doc, "H3 compares attention after diffusion removal with attention on the original photos. "
+                "With the masks in the classifier's frame, the first reading (a centred Gaussian beats every "
+                "arm) must be re-read from the baseline rows in section 4: " +
+                " ".join(xt.baseline_verdicts(x2, "recall")) + " Whether H3 is supported is read from the "
+                "planned comparison above and the Cv2 rows, not from this sentence.")
     body(doc, "Resolution control: ", space_after=2)
     bullet(doc, f"A vs A*: {verdict(row(stats, 'test_macro_f1', 'A-Astar', 'full'))}. Because "
                 "this is inconclusive, the 128 px round-trip alone does not explain Arm C's "
@@ -483,6 +498,31 @@ def build() -> Path:
               "failed. Standardised effect sizes for macro-F1 are not reported because the "
               "earlier ones were not interpretable; per-image log-loss shows no established "
               "difference either (pooled_seed_analysis.csv).", size=9.5)
+    h2(doc, "Per-seed differences behind the pooled comparisons (macro-F1)")
+    ps_ = pd.read_csv(logs / "pooled_per_seed.csv")
+    ps_ = ps_[ps_["subset"] == "full"]
+    pooled_ = pd.read_csv(logs / "pooled_seed_analysis.csv")
+    pooled_ = pooled_[pooled_["subset"] == "full"]
+    prow = []
+    for name_ in ("A-B", "A-Astar", "A-Cv2", "B-Cv2", "Cv2-Astar"):
+        a_, b_ = name_.split("-")
+        pa_ = ps_[ps_["arm"] == a_].set_index("seed")["macro_f1"]
+        pb_ = ps_[ps_["arm"] == b_].set_index("seed")["macro_f1"]
+        common_ = sorted(set(pa_.index) & set(pb_.index))
+        dd_ = [float(pa_[s] - pb_[s]) for s in common_]
+        f1_ = pooled_[(pooled_["endpoint"] == "macro_f1") & (pooled_["comparison"] == name_)].iloc[0]
+        ll_ = pooled_[(pooled_["endpoint"] == "log_loss") & (pooled_["comparison"] == name_)].iloc[0]
+        prow.append([name_, str(f1_["family"]), f"{f1_['difference']:+.3f} ({f1_['ci_low']:+.3f} to {f1_['ci_high']:+.3f})",
+                     f"{f1_['p_holm']:.3f}", ", ".join(f"{v:+.3f}" for v in dd_),
+                     f"{sum(v > 0 for v in dd_)} of {len(dd_)}",
+                     f"{ll_['difference']:+.3f} ({ll_['ci_low']:+.3f} to {ll_['ci_high']:+.3f})"])
+    table(doc, ["Comparison", "Family", "Pooled macro-F1 diff. (95% CI, lesions and seeds)", "p (Holm)",
+                "Per-seed differences (seeds " + ", ".join(str(s) for s in common_) + ")",
+                "Seeds a higher", "Per-image log-loss diff. (95% CI)"],
+          prow, widths=[0.75, 0.85, 1.35, 0.5, 1.9, 0.5, 1.25], font=7, align_right_from=2)
+    body(doc, "The pooled difference replaces the standardised effect size used earlier, which divided by the "
+              "spread of per-lesion differences and could take the wrong sign. Rows involving Cv2 are "
+              "exploratory. Negative log-loss differences favour the first arm.", size=9.5, italic=True)
     h2(doc, "Image quality on the 186 synthetic test pairs")
     mq = {c: q2[c].mean() for c in ("hairy_input_psnr", "B_psnr", "Cv2_psnr", "Creleased_psnr",
                                     "hairy_input_ssim", "B_ssim", "Cv2_ssim", "Creleased_ssim")}
@@ -503,30 +543,18 @@ def build() -> Path:
               "curves that the detector finds exactly, DullRazor repairs only those pixels, and "
               "the diffusion model regenerates the whole 128 px image and loses fine detail. "
               "The pairs say nothing about real hair.", size=9.5)
-    h2(doc, "Explanation overlap (X1 subset; top 20% attention inside the lesion)")
-    def arm_means(metric: str) -> dict:
-        # Lesion-group means the statistics use, so table and intervals agree.
-        a_as = row(stats_cv2, metric, "A-Astar")
-        return {"A": float(a_as["arm_a_mean"]), "Astar": float(a_as["arm_b_mean"]),
-                "B": float(row(stats, metric, "A-B")["arm_b_mean"]),
-                "Cv2": float(row(stats_cv2, metric, "A-Cv2")["arm_b_mean"])}
-    gm, rm = arm_means("x1_gradcam_overlap20"), arm_means("x1_rollout_overlap20")
-    table(doc, ["Arm", "Grad-CAM overlap", "Rollout overlap"],
-          [[ARM_LABEL[a], f"{gm[a]:.3f}", f"{rm[a]:.3f}"] for a in ("A", "Astar", "B", "Cv2")],
-          widths=[3.0, 1.5, 1.5], align_right_from=1)
-    g = row(stats_cv2, "x1_gradcam_overlap20", "Cv2-Astar")
-    ro = row(stats_cv2, "x1_rollout_overlap20", "Cv2-Astar")
-    body(doc, f"Against the resolution-matched control A*, Grad-CAM overlap does not differ "
-              f"({float(g['difference']):+.3f}, CI {float(g['ci_low']):+.3f} to "
-              f"{float(g['ci_high']):+.3f}), so the gain over A comes from the 128 px resolution. "
-              f"Rollout overlap is higher by {float(ro['difference']):+.3f} (CI "
-              f"{float(ro['ci_low']):+.3f} to {float(ro['ci_high']):+.3f}), a small gain whose "
-              "interval leaves out seed-to-seed variation; Cv2 exceeds A* in two of three seeds. "
-              "The A* rows were added to the statistics after the planned rows had been seen. These are "
-              "three-seed numbers: arm A's Grad-CAM overlap ranges from 0.22 to 0.44 across "
-              "seeds, and every arm is below the centred-Gaussian baseline of 0.644 for both "
-              "methods, so no between-arm claim is drawn from them.",
-         size=9.5)
+    h2(doc, "Explanation results for the rebuilt diffusion arm (exploratory)")
+    cmp_ = x2["comp"]
+    for metric in ("recall", "pointing"):
+        sub_ = cmp_[(cmp_["a"] == "Cv2") & (cmp_["b"] == "Astar") & (cmp_["frame"] == xt.AS_IS)
+                    & (cmp_["metric"] == metric)]
+        for r in sub_.itertuples():
+            bullet(doc, f"Cv2 - A*, {r.method}, {metric}: {r.difference:+.3f} (95% CI {r.ci_low:+.3f} to "
+                        f"{r.ci_high:+.3f}; per-seed {r.per_seed_differences}); "
+                        f"{'struck: seed spread exceeds the difference' if r.struck else 'not struck'}.")
+    body(doc, "A* is the resolution-matched control, added to the statistics after the planned rows had "
+              "been seen, so every Cv2 row is exploratory. The full tables, with the shifted-lesion "
+              "robustness test, are in section 4 and in reports/xai_corrected_results.md.", size=9.5)
     h2(doc, "Checks added after the independent review (validation data only)")
     comp = json.loads((logs / "stageE_composite_arms.json").read_text())
     ca = comp["arms"]

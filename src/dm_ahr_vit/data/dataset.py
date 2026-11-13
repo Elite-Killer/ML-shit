@@ -40,12 +40,9 @@ def build_transforms(cfg: dict, train: bool):
     # Eval: resize the shorter side to int(size * 1.14) = 255, then centre-crop.
     # This is the pipeline the recorded runs used; squashing to a square or
     # resizing to 256 changes predictions on these 600x450 images.
-    return transforms.Compose([
-        transforms.Resize(int(size * 1.14)),
-        transforms.CenterCrop(size),
-        transforms.ToTensor(),
-        norm,
-    ])
+    from ..xai.geometry import eval_ops  # one definition of the model's frame (see xai/geometry)
+
+    return transforms.Compose([*eval_ops(size), transforms.ToTensor(), norm])
 
 
 class ArmDataset(Dataset):

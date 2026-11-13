@@ -412,3 +412,21 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
   this run produced no learning-curve snapshots despite the pre-registration
   calling for them. Config now sets it to 5000 and the fallback is 5000.
 
+## D29 - Intermittent NaN gradients on CPU, found while testing the trainer
+
+- Observed: `test_training_loss_and_gradients_match_upstream_p_losses` failed on
+  some runs with a NaN gradient cosine. Losses matched to 1e-6 every time.
+- Probe (`scripts/33_nan_grad_probe.py`, 150 runs each, CPU, small U-Net): with
+  2 threads, upstream's own `p_losses` gave NaN gradients in 5 runs and our
+  `training_loss` in 4; with 1 thread, upstream 0 and ours 1. Anomaly detection
+  placed the NaN in the backward pass through the U-Net's final block.
+- Reading (Inferred): a CPU-kernel problem shared by both paths, not a difference
+  between our trainer and upstream. Not seen in the 20,000-iteration GPU run,
+  whose losses stayed finite throughout. Root cause of the CPU NaN is Unknown.
+- Change: the gradient-cosine assertion is skipped on a draw whose gradient is
+  non-finite, with the reason in the skip message; the loss-equality assertion
+  always runs. Five seeds are parametrised so the check is not vacuous.
+- Protocol slip, disclosed: two throwaway debug scripts were run before being
+  committed, against the evidence rule. They were deleted; the one that carries
+  the result was committed as `scripts/33_nan_grad_probe.py`.
+

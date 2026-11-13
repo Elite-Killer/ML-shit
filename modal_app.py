@@ -580,20 +580,24 @@ def stats_arm(c_arm: str = "Cv2"):
 
 
 @app.function(image=image, cpu=8, memory=32768, timeout=7200, volumes={"/vol": vol})
-def pasteback_tune():
+def pasteback_tune(variant: str = "coarse"):
     """Stage D parameter search on the validation synthetic pairs only."""
-    return _run("48_pasteback.py", ["tune"])
+    return _run("48_pasteback.py", ["tune", "--variant", variant])
 
 
 @app.function(image=image, cpu=8, memory=32768, timeout=7200, volumes={"/vol": vol})
-def pasteback_real(ids: str, name: str, tau: float, dilate: int, refine: bool = True):
-    args = ["real", "--ids", ids, "--name", name, "--tau", str(tau), "--dilate", str(dilate)]
+def pasteback_real(ids: str, name: str, tau: float, dilate: int, refine: bool = True,
+                    thin_t: float = 0.0, grow: int = 2):
+    args = ["real", "--ids", ids, "--name", name, "--tau", str(tau), "--dilate", str(dilate),
+            "--thin-T", str(thin_t), "--grow", str(grow)]
     return _run("48_pasteback.py", args + (["--refine"] if refine else []))
 
 
 @app.function(image=image, cpu=8, memory=32768, timeout=7200, volumes={"/vol": vol})
-def pasteback_build(target: str, tau: float, dilate: int, refine: bool = True):
-    args = ["build", "--target", target, "--tau", str(tau), "--dilate", str(dilate)]
+def pasteback_build(target: str, tau: float, dilate: int, refine: bool = True,
+                    thin_t: float = 0.0, grow: int = 2):
+    args = ["build", "--target", target, "--tau", str(tau), "--dilate", str(dilate),
+            "--thin-T", str(thin_t), "--grow", str(grow)]
     return _run("48_pasteback.py", args + (["--refine"] if refine else []))
 
 

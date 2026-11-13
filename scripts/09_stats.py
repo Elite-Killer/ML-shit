@@ -427,6 +427,10 @@ def main() -> int:
 
         for metric in ("gradcam_overlap20", "rollout_overlap20"):
             out += xai_rows(metric, reps, bseed, comparisons)
+        # Resolution control for explanation overlap, added with the Stage C analysis
+        # after the planned rows were first seen: A* is the control named in the addendum.
+        for metric in ("gradcam_overlap20", "rollout_overlap20"):
+            out += xai_rows(metric, reps, bseed, [("A", "Astar"), (C_ARM, "Astar")])
 
     if not out:
         log.error("no statistical comparisons could be computed")

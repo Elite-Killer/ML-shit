@@ -1,0 +1,5 @@
+loaded DM-AHR checkpoint /root/local/diag/ckpt/released.pth (strict)
+[W1113 13:01:01.155408191 NNPACK.cpp:61] Could not initialize NNPACK! Reason: Unsupported hardware.
+released 50 {'t': 50, 'eps_l1_kept': 0.2008, 'eps_l1_zero_cond': 0.6197, 'eps_l1_shuffled_cond': 0.589, 'ratio_zero_over_kept': 3.0861, 'ratio_shuffled_over_kept': 2.9331, 'x0_psnr_onestep': 38.8711, 'noisy_input_psnr': 28.0003}
+released 200 {'t': 200, 'eps_l1_kept': 0.0799, 'eps_l1_zero_cond': 0.3109, 'eps_l1_shuffled_cond': 0.2824, 'ratio_zero_over_kept': 3.8895, 'ratio_shuffled_over_kept': 3.5323, 'x0_psnr_onestep': 34.158, 'noisy_input_psnr': 16.3699}
+released 500 {'t': 500, 'eps_l1_kept': 0.0384, 'eps_l1_zero_cond': 0.1412, 'eps_l1_shuffled_cond': 0.1319, 'ratio_zero_over_kept': 3.6771, 'ratio_shuffled_over_kept': 3.4342, 'x0_psnr_onestep': 31.1697, 'noisy_input_psnr': 9.4432}

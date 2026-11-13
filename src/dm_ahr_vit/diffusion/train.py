@@ -103,6 +103,27 @@ def val_loss(net, loader, device: str, timesteps=(200, 800, 1400, 1900)) -> floa
     return float(np.mean(losses))
 
 
+def training_loss(net, hr: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
+    """One training loss, equivalent to upstream `p_losses` / numel.
+
+    RNG draw order (numpy t, numpy levels, torch noise) matches upstream so a
+    seeded differential test can compare the two exactly.
+    """
+    t = np.random.randint(1, net.num_timesteps + 1)
+    # Continuous noise level per sample, as upstream: uniform between
+    # sqrt(alpha_cumprod_prev) at t-1 and at t.
+    lo = float(net.sqrt_alphas_cumprod_prev[t - 1])
+    hi = float(net.sqrt_alphas_cumprod_prev[t])
+    alpha = torch.tensor(
+        np.random.uniform(lo, hi, size=hr.shape[0]), dtype=hr.dtype, device=hr.device
+    )
+    alpha_4d = alpha.view(-1, 1, 1, 1)
+    noise = torch.randn_like(hr)
+    x_noisy = alpha_4d * hr + (1 - alpha_4d**2) ** 0.5 * noise
+    pred = net.denoise_fn(torch.cat([cond, x_noisy], dim=1), alpha.view(-1, 1))
+    return (pred - noise).abs().mean()
+
+
 def train(
     cfg: dict,
     pairs: pd.DataFrame,
@@ -199,19 +220,7 @@ def train(
         batch = next(it)
         hr = batch["HR"].to(device, non_blocking=True)
         cond = batch["SR"].to(device, non_blocking=True)
-        t = np.random.randint(1, net.num_timesteps + 1)
-        # Continuous noise level per sample, exactly as upstream `p_losses`:
-        # uniform between sqrt(alpha_cumprod_prev) at t-1 and at t.
-        lo = float(net.sqrt_alphas_cumprod_prev[t - 1])
-        hi = float(net.sqrt_alphas_cumprod_prev[t])
-        alpha = torch.tensor(
-            np.random.uniform(lo, hi, size=hr.shape[0]), dtype=hr.dtype, device=device
-        )
-        alpha_4d = alpha.view(-1, 1, 1, 1)
-        noise = torch.randn_like(hr)
-        x_noisy = alpha_4d * hr + (1 - alpha_4d**2) ** 0.5 * noise
-        pred = net.denoise_fn(torch.cat([cond, x_noisy], dim=1), alpha.view(-1, 1))
-        loss = (pred - noise).abs().mean()
+        loss = training_loss(net, hr, cond)
         opt_g.zero_grad(set_to_none=True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)

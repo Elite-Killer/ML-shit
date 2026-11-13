@@ -761,6 +761,12 @@ def lc_eval(ckpts: str, commit: str):
     return _run("63_learning_curve_eval.py", ["--ckpts", ckpts, "--commit", commit])
 
 
+@app.function(image=image, cpu=8, memory=32768, timeout=7200, volumes={"/vol": vol})
+def export_checkpoints(commit: str):
+    """Weights-only ViT exports and diffusion weights with a SHA-256 manifest, on the volume."""
+    return _run("71_export_checkpoints.py", ["--commit", commit])
+
+
 @app.local_entrypoint()
 def lc_start(iterations: int = 100000):
     """Clipped continuation and the no-clip comparison, same start state, run side by side."""

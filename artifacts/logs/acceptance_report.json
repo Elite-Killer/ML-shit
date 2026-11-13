@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-13T16:25:05+00:00",
+  "generated_at": "2026-11-13T18:43:55+00:00",
   "gates": [
     {
       "gate": "G1",
@@ -47,7 +47,7 @@
       "gate": "G8",
       "status": "PASS",
       "evidence": "/__modal/volumes/vo-TbNx5IITKUKx9iVQZHZpNF/artifacts/predictions",
-      "detail": "prediction_files=15, metric_files=15, missing=[]"
+      "detail": "prediction_files=18, metric_files=18, missing=[]"
     },
     {
       "gate": "G9",
@@ -58,8 +58,8 @@
     {
       "gate": "G10",
       "status": "PASS",
-      "evidence": "27 CSVs",
-      "detail": "rows=40554 tiers=['X1'] gradcam_overlap20=0.3694"
+      "evidence": "30 CSVs",
+      "detail": "rows=45060 tiers=['X1'] gradcam_overlap20=0.3730"
     },
     {
       "gate": "G11",

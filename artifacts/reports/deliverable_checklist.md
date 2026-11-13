@@ -7,13 +7,11 @@ it actually inspected.
 |---|---|---|---|---|
 | V1 | Split hash unchanged; zero lesion overlap across splits | **PASS** | `data/manifests/splits.sha256, artifacts/logs/data_audit.json` | hash=fda56cf3c555e6d2… max distinct splits per group=1 |
 | V2 | Headline metrics recomputed from predictions | **PASS** | `artifacts/predictions/pred_*.csv, artifacts/logs/classification_seed_summary.csv` | 8 statistics, max abs diff 0.00e+00 (tolerance 1e-6) |
-| V3 | Reports rebuild from artifacts; tracked copy matches generated | **FAIL** | `scripts/13_*, scripts/14_*, scripts/15_*` | 13_preprocessing_report.py:ok; 14_results_report.py:se KeyError(f"{not_found} not in index")
-KeyError: "['Creleased'] not in index"
-; 15_code_guide_report.py:ok; report identical=False |
+| V3 | Reports rebuild from artifacts; tracked copy matches generated | **PASS** | `scripts/13_*, scripts/14_*, scripts/15_*` | 13_preprocessing_report.py:ok; 14_results_report.py:ok; 15_code_guide_report.py:ok; report identical=True |
 | V4 | No stale phrases in either report | **PASS** | `reports/final_research_report.md, artifacts/reports/*.docx` | over-smoothing (affirmative)=0, expert-traced disclaimer=0, no independent hair annotations=0, 'part of that margin'=0, 'uniform chance 0.200' as a claim=0 |
 | V5 | Determinism: Arm A seed 42 reproduces | **PASS** | `artifacts/logs/reproduction_log.json` | diff=0.000000 tolerance=0.02 |
-| V6 | Unit tests pass | **PASS** | `tests/` | 44 passed, 2 skipped, 35 warnings in 13.38s |
-| V7 | All three .docx present and rendered to PDF | **PASS** | `artifacts/reports/*.docx, artifacts/reports/*.pdf` | {"Preprocessing_Report.docx": 10, "Results_Report.docx": 8, "Code_Guide_Report.docx": 14} |
+| V6 | Unit tests pass | **PASS** | `tests/` | 59 passed, 2 skipped, 15 warnings in 22.99s |
+| V7 | All three .docx present and rendered to PDF | **PASS** | `artifacts/reports/*.docx, artifacts/reports/*.pdf` | {"Preprocessing_Report.docx": 11, "Results_Report.docx": 11, "Code_Guide_Report.docx": 15} |
 | V8 | Spend within budget | **PASS** | `artifacts/logs/run_registry.jsonl` | diagnosis 29.1 min = $1.02; budget $8.37 |
 
-**7 of 8 gates pass.**
+**8 of 8 gates pass.**

@@ -358,6 +358,18 @@ split was used). In code:
 Honest status: the pre-registered real-photo gate for Stage B was not met (decision D34) and Stage C was
 run anyway as a recorded deviation; read `reports/stageC_results.md` for what that does and does not show.
 
+Later stages (all documented in `reports/`):
+
+- **Stage D** (`reports/prereg_v3_pasteback.md`, `scripts/48_pasteback.py`, `src/dm_ahr_vit/hair/pasteback.py`): full-resolution
+  paste-back of the diffusion fill. Failed its validation gate (SSIM 0.846 against 0.90); never used on test data.
+- **Stage E** (`reports/prereg_v4_review_response.md`, `reports/stageE_results.md`): response to an independent review.
+  `scripts/53_pooled_analysis.py` (with `src/dm_ahr_vit/stats/pooled.py`) pools eight seeds with a two-level bootstrap;
+  `50_composite_arms.py`, `51_condition_usage.py`, `52_residual_hair_split.py` are validation-only checks;
+  `54_review_kit.py` builds and analyses a blinded human-review kit; `55_headline_table.py` writes the pooled headline
+  metrics. `49_second_opinion_brief.py` builds `reports/SECOND_OPINION_BRIEF.md`.
+- The final report was edited by hand after Stage C. Re-running `10_finalize.py` regenerates it from its template and would
+  drop the Stage C and Stage E sections; port them first.
+
 ## 5. What was actually used
 | Element | What was used | Where it is recorded |
 |---|---|---|

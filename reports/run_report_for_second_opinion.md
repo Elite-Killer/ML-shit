@@ -83,7 +83,29 @@ with 2,000 timesteps, U-Net inner channel 64, channel multipliers
 
 Upstream reference: `config/akiec.json` in the authors' repository sets
 `n_iter = 660000`. The released checkpoint is named `I725000_E1083`, i.e.
-725,000 iterations. We therefore trained at about **3% of the published budget**.
+725,000 iterations.
+
+**Correction to an earlier version of this report.** It claimed we trained at
+about 3% of the published budget. That framing was wrong. The paper's stated
+reference settings, quoted in `docs/DEVELOPMENT_KIT.md` line 178, are 2,000
+timesteps and **20,000 training iterations**. That is exactly what we ran. The
+660,000 figure comes from the shipped config file, not from the paper's stated
+reference. So our run matched the paper's stated budget and still failed, which
+points at implementation rather than budget.
+
+Two further differences between our run and the released checkpoint that the
+budget framing obscured:
+
+| Setting | Ours | Upstream |
+|---|---|---|
+| Iterations | 20,000 | 660,000 config, 725,000 checkpoint |
+| EMA | **none** | decay 0.9999, started at step 5,000 |
+| Batch size | 4 | 4 |
+| Noise-prediction convention | legacy (see 7c) | upstream |
+
+Our trainer has no EMA at all, while upstream applies EMA from step 5,000
+onwards. If the released weights are EMA weights, part of the observed gap is an
+EMA difference, not an iteration-count difference.
 
 ## 6. The evidence that more iterations would help
 
@@ -174,6 +196,24 @@ Retraining three ViT seeds and redoing evaluation and XAI adds about $1.
 **Full repair at 660,000 iterations: about $34 and roughly one day of wall clock.**
 
 ## 9. The question
+
+An independent review of this report concluded that budget is unlikely to be the
+defect and recommended staged diagnostics first. Its reasoning, which we accept:
+
+- Our 20,000 iterations matched the paper's stated reference, so "undertrained
+  relative to the paper" was not a valid premise.
+- The 6a contrast compares weights that differ in training convention, EMA and
+  iteration count at once, so it cannot attribute the gap to iterations.
+- Low noise MSE with bad samples, as in the retrained variant, places the
+  defect downstream of average noise accuracy: sampler, respacing, noise-level
+  embedding, conditioning at sampling time, x0 clipping, or raw versus EMA.
+- The released model already scores 0.713, tied with DullRazor and below
+  original images, so beating 0.750 is unlikely regardless of budget.
+
+The cheapest discriminating test is one-step x0 PSNR across a full timestep
+grid for released versus our model, plus a zeroed-condition ablation. If
+one-step reconstruction matches the released model but multi-step sampling does
+not, the sampler or schedule is at fault and no amount of training will help.
 
 Given all of the above, and especially the three counter-indications in section
 7, please judge:

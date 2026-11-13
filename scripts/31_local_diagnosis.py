@@ -159,6 +159,8 @@ def cmd_sample(args) -> None:
     x0 = preprocess(refs, size)
     cond = preprocess(hairy, size)
     net = load_model(cfg, Path(args.ckpt), device="cpu").eval()
+    # Hybrid chain: --ckpt-high handles loop indices >= --switch-t, --ckpt the rest.
+    net_hi = load_model(cfg, Path(args.ckpt_high), device="cpu").eval() if args.ckpt_high else None
     T = net.num_timesteps
     torch.manual_seed(args.seed)
     if args.start_t is None:
@@ -172,17 +174,22 @@ def cmd_sample(args) -> None:
     states = {}
     t0 = time.time()
     for i in range(i0, -1, -1):
-        img = net.p_sample(img, i, condition_x=cond)
+        step_net = net_hi if (net_hi is not None and i >= args.switch_t) else net
+        img = step_net.p_sample(img, i, condition_x=cond)
         if i in keep:
             states[f"t{i}"] = to01(img)[0]
         if i % 100 == 0:
             print(f"step {i0 - i + 1}/{i0 + 1} {time.time() - t0:.0f}s", flush=True)
     OUT.mkdir(parents=True, exist_ok=True)
     tag = f"{args.name}_pair{args.pair}" + (f"_from{args.start_t}" if args.start_t else "")
+    if net_hi is not None:
+        tag += f"_hi{args.switch_t}"
     np.savez(OUT / f"sample_{tag}.npz", final=to01(img)[0], ref=to01(x0)[0], hairy=to01(cond)[0], **states)
     meta = {"name": args.name, "pair_id": val["pair_id"][0], "pair_index": args.pair,
             "start_t": args.start_t, "seed": args.seed, "seconds": time.time() - t0,
-            "provenance": provenance({args.name: args.ckpt}, manifest, val["pair_id"].tolist())}
+            "switch_t": args.switch_t if net_hi is not None else None,
+            "provenance": provenance({args.name: args.ckpt, **({"high": args.ckpt_high} if net_hi is not None else {})},
+                                     manifest, val["pair_id"].tolist())}
     (OUT / f"sample_{tag}.json").write_text(json.dumps(meta, indent=1))
 
 
@@ -240,6 +247,8 @@ def main() -> int:
     s.add_argument("--pair", type=int, default=0)
     s.add_argument("--seed", type=int, default=42)
     s.add_argument("--start-t", type=int, default=None)
+    s.add_argument("--ckpt-high", default=None)
+    s.add_argument("--switch-t", type=int, default=1500)
     args = ap.parse_args()
     {"profile": cmd_profile, "sample": cmd_sample, "analyze": cmd_analyze}[args.cmd](args)
     return 0

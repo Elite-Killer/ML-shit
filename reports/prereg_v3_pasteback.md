@@ -81,3 +81,17 @@ One change: the full-resolution mask is the **thin** dark-hair response (black-h
 - If `thin` also fails a gate, I stop again and report; no further variants are run before the owner has seen the numbers.
 - Status: still exploratory; the `coarse` result stays in the record as a failed variant.
 
+## Result of variant `thin` (validation only, `artifacts/logs/stageD_val_tuning_thin.json`)
+
+Best setting (tau 2, dilate 1, refine on, T 18, grow 1): **33.33 dB, SSIM 0.846**, replaced area 20% of the image. Baselines unchanged (Cv2 alone 29.02 dB / 0.858, DullRazor 35.74 dB / 0.915).
+
+- **D1 passes** (33.33 against 32.02: +4.3 dB over Cv2 alone).
+- **D2 fails** (SSIM 0.846 against 0.90). The best SSIM anywhere in the 36-setting grid is 0.847, below the 0.858 of Cv2 alone.
+- D3, D4 and D6 were not run: by the stop rule above, a failed gate ends this variant before any real-photo or test use. No test image or test pair was read in Stage D.
+
+Reading (validation numbers only):
+- Every best value sits at the smallest grid value (tau 2, T 18, grow 1) and PSNR drops as `grow` rises (33.38, 32.61, 32.21 dB for grow 1, 2, 3). A wider replaced band hurts because the 128 px fill, upsampled, does not match the local skin texture and tone at the seam; a narrower band leaves hair edges behind, which SSIM punishes. The 128 px fill is the limiting part, not the mask.
+- DullRazor's Telea inpainting fills from neighbouring full-resolution pixels, which is why it keeps both PSNR and SSIM higher on these synthetic pairs.
+- Variants not tried, for the owner to choose: (a) keep the diffusion model as the hair/lesion discriminator and fill with full-resolution classical inpainting (a hybrid; it would have to be called that, not "diffusion hair removal"); (b) train the diffusion model at a higher resolution (the root cause, unproven, several times the compute).
+
+

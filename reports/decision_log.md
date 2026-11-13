@@ -477,3 +477,10 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
 - Incidental findings: the repository's `artifacts/logs` mirror was behind the Modal volume (no Creleased summary, 100+ diagnostic files missing), so it was re-synced from the volume before the reports were rebuilt; the sampler's synthetic-pair manifest paths pointed at an old volume id and are now re-rooted.
 - Wording rule kept: no document says hair removal was validated; D34 gives the permitted statement.
 - Cost: about 1.3 A100-80GB GPU-hours over Stages B and C (fine-tune 11 min, sampling 33 min across four containers, three ViT runs about 35 min, validation checks a few minutes). At an unverified $2.5 to $3.5 per hour that is roughly $3 to $5; Modal prices were not checked.
+
+## D36 - Stage D: full-resolution paste-back of the diffusion fill failed its validation gates
+
+- Plan and gates were committed first (`reports/prereg_v3_pasteback.md`, commit e998b63). Two variants were run on the 182 validation synthetic pairs only: `coarse` (31.76 dB, SSIM 0.831; fails D1 and D2) and `thin` (33.33 dB, SSIM 0.846; passes D1, fails D2 at 0.90). The `thin` variant and the extra lesion gate D6 were registered after the `coarse` failure and before it ran; bars were not changed.
+- Stop rule applied: no Cv2p image was built for real photos or test pairs, no ViT was trained, no test image or test pair was read.
+- Cause (validation reading): the 128 px fill does not match local texture at the seam at full resolution. Next options are listed in the prereg (hybrid with classical inpainting, or higher-resolution diffusion); both are the owner's call.
+- Both variants are exploratory (designed after the Stage C test results were seen). The grid searches used validation data only; two rounds of tuning on validation add some risk of fitting to it, which is another reason a third round waits for the owner.

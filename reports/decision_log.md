@@ -384,13 +384,17 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
   retrain legitimately overwrites `best_gen.pth`. The old account retains the
   original tree as well.
 
-## D28 - Gate 3 failed: the encoding fix was necessary but not sufficient
+## D28 - Gate 3 indicative fail at n=8: encoding fix necessary, sufficiency not established
 
 - Result: fixed Arm C retrained from scratch, 20,000 iterations, 654 train pairs,
-  best validation L1 0.02003. On 182 validation pairs at 2,000 sampling steps it
-  scores **14.11 dB against a 20.08 dB floor, margin -5.97 dB. Fail.**
-- Positive control: the released checkpoint through the same script, pairs and
-  steps scores **26.64 dB, margin +6.55 dB, pass.** The evaluation is sound.
+  best validation L1 0.02003. **Correction: this was measured on 8 validation
+  pairs, not 182.** The 182-pair job never produced output; the figures come from
+  the 8-pair smoke run. On those 8 pairs at 2,000 steps it scores
+  **14.11 dB against a 20.08 dB floor, margin -5.97 dB**, which would be in the
+  fail band, but the formal gate is not established at n=8.
+- Positive control (same 8 pairs): the released checkpoint through the same
+  script and steps scores **26.64 dB, margin +6.55 dB.** The evaluation harness
+  separates the two models on these pairs.
 - What the fix demonstrably repaired: condition usage went from 0.97x-1.79x to
   4.00x-3.32x, matching the released model's 4.16x-4.78x; single-step
   reconstruction went from 24.58 dB to 41.69 dB at t=200, now better than the

@@ -68,14 +68,20 @@ fixed trainer against weights that already work: fine-tuning the released
 checkpoint for 1,000 iterations changed PSNR by +0.16 dB, so the fixed trainer
 does not destroy good weights. Gate 3 below is the informative test.
 
-## Result: Gate 3 - FAIL
+## Result: Gate 3 - indicative fail at n=8 (not established at 182)
 
 Fixed Arm C retrained from scratch for 20,000 iterations on the 654 train-split
-pairs. Best validation L1 0.02003. Scored on 182 validation pairs at the paper's
-2,000 sampling steps.
+pairs. Best validation L1 0.02003.
 
-**Sampling: 14.11 dB against a 20.08 dB hairy floor, margin -5.97 dB. Pre-registered
-verdict: fail.**
+**CORRECTION (13:30 UTC): the figures below are from 8 validation pairs, not 182.**
+The 182-pair job was launched detached and never produced output (no
+`gate3_eval.json`, empty app log). The numbers here come from the 8-pair smoke run
+(`--pairs 8`) at 2,000 sampling steps, and the earlier text of this section
+wrongly said 182. The pre-registered verdict is therefore **not formally
+established**; n=8 is indicative only. Read the 14.11 / 26.64 dB figures as n=8.
+
+**Sampling (n=8): 14.11 dB against a 20.08 dB hairy floor, margin -5.97 dB. This
+would fall in the fail band if it held at 182 pairs; it has not been measured there.**
 
 Positive control, same script, same pairs, same steps: the released checkpoint
 scores **26.64 dB, margin +6.55 dB, verdict pass**. So the evaluation is sound and

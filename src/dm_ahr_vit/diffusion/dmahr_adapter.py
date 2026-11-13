@@ -233,20 +233,32 @@ def clean_batch(
 @torch.no_grad()
 def respaced_super_resolution(net, cond: torch.Tensor, steps: int = 25,
                               seed: int | None = None,
-                              use_bf16: bool = False) -> tuple[torch.Tensor, dict]:
+                              use_bf16: bool = False,
+                              start_t: int | None = None) -> tuple[torch.Tensor, dict]:
     """Deterministic DDIM sampling over the trained schedule in `steps` jumps.
 
     Uses the model's own 2,000-step alphas and visits `steps` of them evenly
     spaced, so every denoiser call is made at a noise level the model was
     trained on. This is what makes 25-step sampling usable.
+
+    `start_t` starts the chain at that schedule index from the noised
+    conditioning image instead of from pure noise. Hair is thin, so a chain
+    that begins at a middling noise level keeps the global tone of the input and
+    never visits the high-noise levels where a briefly trained model is weak.
     """
     if seed is not None:
         torch.manual_seed(int(seed))
         torch.cuda.manual_seed_all(int(seed))
     T = int(net.num_timesteps)
-    seq = np.linspace(T - 1, 0, steps).round().astype(int)
+    top = T - 1 if start_t is None else int(min(max(start_t, 1), T - 1))
+    seq = np.linspace(top, 0, steps).round().astype(int)
     seq = np.unique(seq)[::-1]  # descending, no duplicates
-    x = torch.randn(cond.shape, device=cond.device)
+    noise = torch.randn(cond.shape, device=cond.device)
+    if start_t is None:
+        x = noise
+    else:
+        a = net.alphas_cumprod[top]
+        x = a.sqrt() * cond + (1.0 - a).sqrt() * noise
     with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=use_bf16):
         for i, t in enumerate(seq):
             level = torch.FloatTensor(

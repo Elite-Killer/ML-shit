@@ -54,6 +54,28 @@ hairy input's PSNR on the same pairs.
 | **Middle** | margin above 0 and below +2.0 dB, or margin passes but t=1500 error does not |
 | **Fail** | margin at or below 0 dB |
 
+## Added after the H10 results, before launching (13:58 UTC)
+
+Observed on GPU, validation pair 0 (hairy floor 19.54 dB), 16 noise draws, true fp32
+(TF32 off, confirmed in the output file), 2,000 steps, `best_gen.pth` sha256 prefix 4269a678:
+
+| Model | PSNR range over 16 draws | Mean |
+|---|---|---:|
+| fixed-20k | 6.5 to 20.0 dB | 11.99 |
+| released | 25.2 to 27.4 dB | 26.26 |
+
+TF32 and bf16 runs of the fixed model gave the same spread (6.4 to 20.0). Precision is
+therefore ruled out. The CPU loop in `scripts/31_local_diagnosis.py` is the same
+algorithm as the production sampler (read line by line), and its single draw reached
+28.17 dB, so the sampler code is also not at fault. The symptom is instability across
+noise draws of the same pair, which a well-trained denoiser does not show.
+
+**Added pass condition (stability):** the 16-draw replicate on pair 0, true fp32, at
+the final checkpoint must have every draw at or above the hairy floor (19.54 dB) and a
+standard deviation of at most 2 dB. The released model's standard deviation is about
+0.7 dB. This condition was added after seeing the data above and is stated before the
+continuation starts; it tightens the pass rule and does not loosen it.
+
 - Pass: freeze the checkpoint, record its hash, then and only then score the 186
   test pairs once and regenerate Arm C.
 - Middle: continue only if the t=1500 error was still falling by more than 10%

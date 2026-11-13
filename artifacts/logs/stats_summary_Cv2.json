@@ -1,0 +1,11 @@
+{
+  "endpoints": [
+    "paired_psnr",
+    "paired_ssim",
+    "test_macro_f1",
+    "x1_gradcam_overlap20",
+    "x1_rollout_overlap20"
+  ],
+  "rows": 22,
+  "seconds": 27.604
+}

@@ -97,6 +97,9 @@ def main() -> int:
     out["sampling"] = {"psnr": float(np.mean(ps)), "ssim": float(np.mean(ss)),
                        "hairy_floor_psnr": float(np.mean(fps)),
                        "hairy_floor_ssim": float(np.mean(fss)),
+                       "per_pair": [{"pair_id": str(pid), "psnr": float(p), "ssim": float(s),
+                                     "hairy_psnr": float(fp)}
+                                    for pid, p, s, fp in zip(val["pair_id"], ps, ss, fps)],
                        "n": len(ps)}
     out["sampling"]["margin_db"] = (out["sampling"]["psnr"]
                                     - out["sampling"]["hairy_floor_psnr"])

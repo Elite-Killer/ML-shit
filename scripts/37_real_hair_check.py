@@ -46,10 +46,10 @@ def cmd_select(args) -> None:
     scr = pd.read_csv(args.screening)
     spl = pd.read_csv(args.splits)[["image_id", "split"]].rename(columns={"split": "split2"})
     df = scr.merge(spl, on="image_id")
-    df = df[(df["split2"] == "train") & (df["hair_present"]) & (df["hair_coverage"] >= args.min_coverage)]
+    df = df[(df["split2"] == args.split) & (df["hair_present"]) & (df["hair_coverage"] >= args.min_coverage)]
     df = df.assign(key=df["image_id"].map(_sha)).sort_values("key").head(args.n)
     Path(args.out).write_text("\n".join(df["image_id"]) + "\n")
-    print(f"selected {len(df)} train-split images, coverage >= {args.min_coverage}, "
+    print(f"selected {len(df)} {args.split}-split images, coverage >= {args.min_coverage}, "
           f"median coverage {df['hair_coverage'].median():.3f}")
 
 
@@ -121,6 +121,7 @@ def main() -> int:
     s.add_argument("--screening", default="/root/local/gate_data/manifests/hair_screening.csv")
     s.add_argument("--splits", default="/root/local/gate_data/manifests/splits.csv")
     s.add_argument("--n", type=int, default=40)
+    s.add_argument("--split", default="train", choices=["train", "val"])  # never test
     s.add_argument("--min-coverage", type=float, default=0.05)
     s.add_argument("--out", default="/root/local/hair_check/ids.txt")
     m = sub.add_parser("measure")

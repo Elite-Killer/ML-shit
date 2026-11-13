@@ -99,3 +99,21 @@ Artifacts: `artifacts/diagnosis/stageA_*_partial_noise.json` (checkpoint hashes 
 Run `fixed 50k` with the Stage A sampler (DDIM, 50 steps, t0 in 600, 1000, 1500) on the 40 train-split real-hair images of `reports/hair_check_prereg.md`, and score with `scripts/37_real_hair_check.py measure --arm ...` (inside/outside change ratio, same detector mask; DullRazor scored 21.7 and the released model 1.13 on this measure).
 
 Prediction: no. The model was trained on simple curved hair, as the released one was on its own synthetic hair, so I expect a ratio below 2 at every t0 and hair still visible. If a ratio of 2 or more appears at some t0 with lesions intact on visual review, real-hair removal already works and Stage B becomes polishing. Either way this is the baseline Stage B has to beat.
+
+## Stage B0 result (40 train-split real-hair images; commit 2b1d170 run before this entry)
+
+Artifacts: `artifacts/diagnosis/real_hair_check_stageB0.json`, `.csv`, `real_hair_contact_sheet_stageB0.png` (columns: original, DullRazor, released, fixed t0=600, t0=1000, t0=1500).
+
+| Arm | inside/outside change ratio | median hair coverage remaining (void measure) |
+|---|---:|---:|
+| DullRazor (control) | 21.73 | 63% |
+| released, as delivered | 1.13 | 95% |
+| fixed 50k, t0=600 | 1.71 | 92% |
+| fixed 50k, t0=1000 | 1.45 | 91% |
+| fixed 50k, t0=1500 | 1.09 | 93% |
+
+Prediction (ratio below 2 at every t0): **held**. The model does not yet remove real hair to the pre-registered bar.
+
+Visual review, agent-reviewed, first four rows of the sheet: unlike DullRazor, the fixed model keeps the lesions intact in every image. It removes the thin dark ruler ticks in row 3 and fades thin hairs, but the thick dark strands in row 1 are still visible at t0=600 and t0=1000. At t0=1500 the whole picture changes (mean change outside the hair mask is 10.9 grey levels, against 1.7 at t0=600), which is why the ratio falls toward 1 there; that value reflects global change, not better or worse hair removal. The ratio depends on the detector mask and is only a rough instrument. Pen marks on skin are left alone by every arm, which is correct.
+
+Baseline for Stage B: ratio 1.71 at t0=600 and 1.45 at t0=1000, on this measure better than the released model (1.13) and far below DullRazor (21.7), with lesions intact.

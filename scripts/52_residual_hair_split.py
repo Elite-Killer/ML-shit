@@ -85,9 +85,13 @@ def main() -> int:
     harvested = set(layers.loc[(layers["hair_pixels"] > 0) & (layers["fraction"] >= MIN_LAYER_FRACTION)
                                & (layers["split"] == "train"), "image_id"])
     hp = scr[scr["hair_present"].astype(bool)]
+    harvested_val = set(layers.loc[(layers["hair_pixels"] > 0) & (layers["fraction"] >= MIN_LAYER_FRACTION)
+                                   & (layers["split"] == "val"), "image_id"])
     groups = {"train_harvested": hp[(hp["split"] == "train") & hp["image_id"].isin(harvested)],
               "train_other": hp[(hp["split"] == "train") & ~hp["image_id"].isin(harvested)],
-              "val": hp[hp["split"] == "val"]}
+              "val": hp[hp["split"] == "val"],
+              # post-hoc (see prereg addendum): same harvest criterion as train_harvested, never trained on
+              "val_harvested": hp[(hp["split"] == "val") & hp["image_id"].isin(harvested_val)]}
     rng = np.random.default_rng(0)
     res, meds = [], {}
     for name, g in groups.items():
@@ -131,6 +135,13 @@ def main() -> int:
         summ["v3"][arm]["harvested_minus_val"] = {
             "median_diff": obs, "ci_low": float(lo), "ci_high": float(hi),
             "asymmetry_by_rule": bool(obs < -0.05 and hi < 0)}
+        c = v3.loc[v3["group"] == "val_harvested", f"remaining_{arm}"].to_numpy()
+        _, mc = boot_median(c, seed=3)
+        d2 = ma - mc
+        lo2, hi2 = np.percentile(d2, [2.5, 97.5])
+        summ["v3"][arm]["posthoc_train_harvested_minus_val_harvested"] = {
+            "median_diff": float(np.median(a) - np.median(c)), "ci_low": float(lo2),
+            "ci_high": float(hi2), "n_val_harvested": int(c.size)}
     save_json(summ, artifact_dir("logs") / "stageE_residual_hair_and_lesion_change.json")
     log.info("V2 %s", summ["v2"])
     log.info("V3 %s", summ["v3"])

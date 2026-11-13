@@ -22,6 +22,13 @@ from dm_ahr_vit.utils import record_run, setup_logging, timed  # noqa: E402
 
 log = setup_logging()
 ARMS = ["A", "B", "C", "Astar"]
+# Stage C scores a second diffusion arm in the role of C; see main(--c-arm).
+C_ARM = "C"
+SUFFIX = ""
+
+
+def as_c_arm(pairs: list) -> list:
+    return [tuple(C_ARM if x == "C" else x for x in pair) for pair in pairs]
 
 
 def _long_from_labels(df: pd.DataFrame, pairs: list) -> pd.DataFrame:
@@ -232,7 +239,7 @@ def classification_endpoint(seeds: list[int], subset: str, reps: int, bseed: int
     save_json(
         {"subset": subset, "observed_macro_f1": observed,
          "arms": available, "n_images": len(common), "n_groups": len(groups)},
-        artifact_dir("logs") / f"stats_classification_{subset}.json",
+        artifact_dir("logs") / f"stats_classification_{subset}{SUFFIX}.json",
     )
     return rows
 
@@ -373,11 +380,19 @@ def xai_rows(metric: str, reps: int, bseed: int, comparisons: list) -> list:
 
 
 def main() -> int:
+    import argparse
+
+    global ARMS, C_ARM, SUFFIX
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--c-arm", default="C", help="arm that plays the role of C (e.g. Cv2)")
+    C_ARM = ap.parse_args().c_arm
+    SUFFIX = "" if C_ARM == "C" else f"_{C_ARM}"
+    ARMS = ["A", "B", C_ARM, "Astar"]
     protocol = load_config("configs/protocol.json")
     seeds = list(protocol["seeds"])
     reps = int(protocol["bootstrap_replicates"])
     bseed = int(protocol["bootstrap_seed"])
-    comparisons = [tuple(c) for c in protocol["planned_comparisons"]]
+    comparisons = as_c_arm([tuple(c) for c in protocol["planned_comparisons"]])
     out: list = []
 
     with timed("stats", log) as t:
@@ -393,22 +408,22 @@ def main() -> int:
         # resolution-matched original, so the 128px round-trip is held constant.
         for subset in ("full", "hair_present"):
             out += classification_endpoint(
-                seeds, subset, reps, bseed, [("C", "Astar")])
+                seeds, subset, reps, bseed, [(C_ARM, "Astar")])
 
-        p = artifact_dir("logs") / "paired_psnr_ssim_test.csv"
+        p = artifact_dir("logs") / f"paired_psnr_ssim_test{SUFFIX}.csv"
         if p.exists():
             df = pd.read_csv(p)
             for metric in ("psnr", "ssim"):
                 out += paired_column_endpoint(
                     df, f"B_{metric}", f"hairy_input_{metric}",
                     f"paired_{metric}", reps, bseed, [("B", "hairy input")])
-                if f"C_{metric}" in df.columns and df[f"C_{metric}"].notna().any():
+                if f"{C_ARM}_{metric}" in df.columns and df[f"{C_ARM}_{metric}"].notna().any():
                     out += paired_column_endpoint(
-                        df, f"C_{metric}", f"B_{metric}",
-                        f"paired_{metric}", reps, bseed, [("C", "B")])
+                        df, f"{C_ARM}_{metric}", f"B_{metric}",
+                        f"paired_{metric}", reps, bseed, [(C_ARM, "B")])
                     out += paired_column_endpoint(
-                        df, f"C_{metric}", f"hairy_input_{metric}",
-                        f"paired_{metric}", reps, bseed, [("C", "hairy input")])
+                        df, f"{C_ARM}_{metric}", f"hairy_input_{metric}",
+                        f"paired_{metric}", reps, bseed, [(C_ARM, "hairy input")])
 
         for metric in ("gradcam_overlap20", "rollout_overlap20"):
             out += xai_rows(metric, reps, bseed, comparisons)
@@ -437,10 +452,10 @@ def main() -> int:
         (table["p_holm"] < 0.05)
         & (table["effect_size_dz"].abs() < 0.2)
     )
-    table.to_csv(artifact_dir("logs") / "statistical_comparisons.csv", index=False)
+    table.to_csv(artifact_dir("logs") / f"statistical_comparisons{SUFFIX}.csv", index=False)
     save_json({"seconds": t["seconds"], "rows": int(len(table)),
                "endpoints": sorted(table["endpoint"].unique().tolist())},
-              artifact_dir("logs") / "stats_summary.json")
+              artifact_dir("logs") / f"stats_summary{SUFFIX}.json")
     record_run("stats", gpu=None, seconds=t["seconds"], rows=int(len(table)))
     print(table.to_string(index=False))
     return 0

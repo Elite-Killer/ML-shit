@@ -177,6 +177,7 @@ def clean_batch(
     use_bf16: bool = False,
     respaced: bool = False,
     schedule: str | None = None,
+    start_t: int | None = None,
 ) -> tuple[list[Image.Image], dict]:
     """Run DM-AHR on a batch of images. Returns cleaned images and run stats."""
     size = int(cfg["native_resolution"])
@@ -186,10 +187,12 @@ def clean_batch(
         # schedule instead (num_timesteps=25) barely adds noise and produces
         # garbage; striding the trained schedule is what makes 25 steps work.
         out, stats = respaced_super_resolution(
-            net, x, steps=int(num_timesteps or 25), seed=seed, use_bf16=use_bf16
+            net, x, steps=int(num_timesteps or 25), seed=seed, use_bf16=use_bf16,
+            start_t=start_t,
         )
         stats.update({"respaced": True, "num_timesteps": int(net.num_timesteps),
-                      "steps": int(num_timesteps or 25)})
+                      "steps": int(num_timesteps or 25), "start_t": start_t,
+                      "bf16": bool(use_bf16)})
         return postprocess(out), stats
     if num_timesteps is not None and int(num_timesteps) != int(net.num_timesteps):
         net.num_timesteps = int(num_timesteps)

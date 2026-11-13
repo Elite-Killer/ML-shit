@@ -520,6 +520,65 @@ def composite_eval(ckpts: str, tag: str, t0s: str = "600,1000", items: int = 48,
     return _run("45_composite_eval.py", args)
 
 
+CV2_CKPT = "/vol/artifacts/checkpoints/dmahr_v2/final_gen.pth"
+
+
+@app.function(image=image, cpu=8, memory=16384, timeout=3600, volumes={"/vol": vol})
+def fill_cv2_passthrough():
+    return _run("05b_fill_c_passthrough.py", ["--arm-name", "Cv2"])
+
+
+@app.function(image=image, gpu="A100-80GB", timeout=86400, volumes={"/vol": vol})
+def cv2_sample(shard: int, n_shards: int, pairs_split: str = "", start_t: int = 600,
+               steps: int = 50, checkpoint: str = CV2_CKPT):
+    """Stage C sampler: strided DDIM from the noised input, fp32. Writes the Cv2 arm only."""
+    args = ["--shard", str(shard), "--n-shards", str(n_shards), "--arm-name", "Cv2",
+            "--respaced", "--steps", str(steps), "--start-t", str(start_t),
+            "--checkpoint", checkpoint]
+    if pairs_split:
+        args += ["--pairs-split", pairs_split]
+    return _run("05_dmahr_sample.py", args)
+
+
+@app.function(image=image, cpu=1, memory=2048, timeout=86400, volumes={"/vol": vol})
+def cv2_sample_driver(n_shards: int = 4, pairs_split: str = ""):
+    """Spawn the Cv2 shards (real hair-present images, plus a synthetic pair split if named)."""
+    handles = [cv2_sample.spawn(i, n_shards, "") for i in range(n_shards)]
+    if pairs_split:
+        handles.append(cv2_sample.spawn(0, 1, pairs_split))
+    results = [h.get() for h in handles]
+    print("all shards finished:", results, flush=True)
+    return results
+
+
+@app.function(image=image, gpu="A100-80GB", timeout=86400, volumes={"/vol": vol})
+def vit_arm_seed(arm: str, seed: int):
+    """Train, evaluate on the locked test split, and explain one arm/seed in one container."""
+    vol.reload()
+    _run("06_train_vit.py", ["--arm", arm, "--seed", str(seed)])
+    _run("07_eval_vit.py", ["--arm", arm, "--seed", str(seed)])
+    _run("08_xai.py", ["--arm", arm, "--seed", str(seed)])
+    return [arm, seed]
+
+
+@app.function(image=image, cpu=1, memory=2048, timeout=86400, volumes={"/vol": vol})
+def vit_arm_driver(arm: str, seeds: str = "42,123,2026"):
+    handles = [vit_arm_seed.spawn(arm, int(s)) for s in seeds.split(",")]
+    results = [h.get() for h in handles]
+    print("all seeds finished:", results, flush=True)
+    return results
+
+
+@app.function(image=image, cpu=8, memory=32768, timeout=7200, volumes={"/vol": vol})
+def image_quality_arm(split: str = "test", c_arm: str = "Cv2"):
+    return _run("07b_image_quality.py", ["--split", split, "--c-arm", c_arm])
+
+
+@app.function(image=image, cpu=8, memory=32768, timeout=7200, volumes={"/vol": vol})
+def stats_arm(c_arm: str = "Cv2"):
+    return _run("09_stats.py", ["--c-arm", c_arm])
+
+
 @app.function(image=image, gpu="A100-80GB", timeout=7200, volumes={"/vol": vol})
 def gate3_eval(pairs: int = 182, checkpoint: str = "", tag: str = "gate3",
                precision: str = "bf16", replicate_first: int = 0,

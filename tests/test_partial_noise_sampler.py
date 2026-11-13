@@ -54,3 +54,18 @@ def test_partial_start_is_seed_deterministic(net):
     b, _ = respaced_super_resolution(net, cond, steps=4, seed=3, start_t=500)
     c, _ = respaced_super_resolution(net, cond, steps=4, seed=4, start_t=500)
     assert torch.equal(a, b) and not torch.equal(a, c)
+
+
+def test_clean_batch_passes_start_t_and_reports_stats(net):
+    from PIL import Image
+
+    from dm_ahr_vit.diffusion.dmahr_adapter import clean_batch
+
+    cfg = load_config("configs/dmahr.json")
+    cfg["native_resolution"] = SIZE
+    imgs = [Image.new("RGB", (40, 30), (120, 90, 80)) for _ in range(2)]
+    outs, stats = clean_batch(net, imgs, cfg, device="cpu", seed=1, num_timesteps=4,
+                              respaced=True, start_t=400)
+    assert stats["start_t"] == 400 and stats["steps"] == 4 and stats["bf16"] is False
+    assert stats["timesteps_visited"][0] == 400
+    assert len(outs) == 2 and outs[0].size == (SIZE, SIZE)

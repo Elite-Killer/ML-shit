@@ -55,7 +55,7 @@ def predict(model, loader, device):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--arm", required=True, choices=["A", "B", "C", "Astar", "Creleased"])
+    ap.add_argument("--arm", required=True, choices=["A", "B", "C", "Astar", "Creleased", "Cv2"])
     ap.add_argument("--seed", required=True, type=int)
     ap.add_argument("--out-dir", default=None,
                     help="override the predictions output directory (reproducibility checks)")

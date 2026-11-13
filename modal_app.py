@@ -409,6 +409,14 @@ def resize_sweep():
     return _run("24_resize_sweep.py")
 
 
+@app.function(image=image, gpu="A100-80GB", timeout=3600, volumes={"/vol": vol})
+def oneshot_diagnostic(pairs: int = 50):
+    # Small batches at 128 px fragment the allocator; expandable segments keeps
+    # the sweep inside the 80 GB budget.
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+    return _run("25_oneshot_diagnostic.py", ["--pairs", str(pairs)])
+
+
 @app.function(image=image, cpu=8, memory=32768, timeout=7200, volumes={"/vol": vol})
 def image_quality(split: str = "test"):
     return _run("07b_image_quality.py", ["--split", split])

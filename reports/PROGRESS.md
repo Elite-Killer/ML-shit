@@ -217,3 +217,22 @@ V7's PDF rendering evidence needs a machine with LibreOffice.
    decision.
 4. Single public dataset, research prototype only, not clinically validated.
 
+## 2026-11-13 - One-step reconstruction diagnostic
+
+Ran `scripts/25_oneshot_diagnostic.py` on 100 validation pairs to separate
+"weights never learned" from "sampler is broken". Released and our checkpoints
+were both scored on one-step x0 reconstruction at t = 50, 200, 500, 1000, 1500,
+1900, with a zeroed-condition ablation.
+
+- Ours reaches 31.54 dB at t=50 against a 22.11 dB do-nothing floor, so it has
+  learned to denoise and the "never learned" explanation is ruled out.
+- Ours is behind the released checkpoint at every timestep, by 7.0 to 9.3 dB in
+  the low-to-mid range, which reads as incomplete convergence.
+- Zeroing the conditioning barely changes our output at t=200 (delta 0.0234
+  versus 0.1076), so our model uses the hair mask far less than the released one.
+- Conclusion: more training should improve Arm C, but the released checkpoint's
+  0.713 caps the realistic ceiling below the 0.750 baseline.
+
+Report: `reports/oneshot_diagnostic_report.md`. Data:
+`artifacts/logs/oneshot_diagnostic.json`.
+

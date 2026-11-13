@@ -143,7 +143,37 @@ original images (difference +0.038, 95% CI +0.005 to +0.071, Holm p = 0.048,
 Cohen's dz 0.05). That 0.713 carries a seed SD of 0.028, against 0.005 to 0.009
 for the other arms, so treat 0.70 as an estimate, not a tight prediction.
 
-## 8. Next step
+## 8. A second reproducibility gap, found while checking the fix
+
+The `Creleased` images were sampled at 25 steps and score 26.91 dB on validation
+pairs. The committed code cannot regenerate that. `scripts/28_respacing_check.py`
+tests the candidates on 25 validation pairs, released checkpoint, fixed seed:
+
+| Mode | 25 steps | 50 steps | 250 steps |
+|---|---:|---:|---:|
+| Schedule truncation | 11.44 | 13.16 | 18.20 |
+| My DDIM respacing | 23.23 | 24.23 | 20.87 |
+| `jsd` schedule | non-finite | non-finite | non-finite |
+| **Recorded Creleased** | **26.91** | 26.73 | 26.59 |
+
+None reproduces it. The recorded values also *decrease* with more steps, while
+mine increase then decrease, so it is a different sampling routine, not a
+parameter difference. **The 25-step respacing implementation that produced the
+Creleased images is not in the repository.**
+
+What this does and does not affect:
+
+- The Creleased images on the volume are real artefacts, and the measurements
+  taken from them stand. The 0.713 macro-F1 and 27.08 dB are properties of those
+  images.
+- What it affects is **regeneration**. The earlier "$1 to regenerate 8,993
+  images" figure assumed working 25-step sampling. Until that routine is
+  recovered, regenerating costs the 2,000-step figure, about $26.
+- My DDIM implementation is a genuine improvement over truncation (23.23 versus
+  11.44 dB) and is kept, but it is not the original method and should not be
+  described as reproducing it.
+
+## 9. Next step
 
 The trainer is fixed and pinned by tests. Before spending on a long run, do the
 two cheap checks that confirm the correction:
@@ -157,3 +187,7 @@ Only after those pass is a 100k run meaningful, checkpointed every 10k, with the
 rule stated in advance: continue to 660k only if the sampler-encoding error drops
 below the `t/T` error, PSNR gains at least 3 dB, and the result clears the
 noisy-input baseline by at least 3 dB.
+
+Separately, recover or rebuild the 25-step sampling routine that produced the
+Creleased images. Until then, treat the Creleased arm as recorded evidence that
+cannot be regenerated, and price any regeneration at 2,000 steps.

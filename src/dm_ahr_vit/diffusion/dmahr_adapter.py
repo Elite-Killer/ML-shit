@@ -175,14 +175,26 @@ def clean_batch(
     seed: int | None = None,
     num_timesteps: int | None = None,
     use_bf16: bool = False,
+    respaced: bool = False,
+    schedule: str | None = None,
 ) -> tuple[list[Image.Image], dict]:
     """Run DM-AHR on a batch of images. Returns cleaned images and run stats."""
     size = int(cfg["native_resolution"])
     x = preprocess(images, size).to(device)
+    if respaced:
+        # Few-step DDIM over the trained 2,000-step schedule. Truncating the
+        # schedule instead (num_timesteps=25) barely adds noise and produces
+        # garbage; striding the trained schedule is what makes 25 steps work.
+        out, stats = respaced_super_resolution(
+            net, x, steps=int(num_timesteps or 25), seed=seed, use_bf16=use_bf16
+        )
+        stats.update({"respaced": True, "num_timesteps": int(net.num_timesteps),
+                      "steps": int(num_timesteps or 25)})
+        return postprocess(out), stats
     if num_timesteps is not None and int(num_timesteps) != int(net.num_timesteps):
         net.num_timesteps = int(num_timesteps)
         net.set_new_noise_schedule(
-            {"schedule": cfg["beta_schedule"]["schedule"],
+            {"schedule": schedule or cfg["beta_schedule"]["schedule"],
              "linear_start": cfg["beta_schedule"]["linear_start"],
              "linear_end": cfg["beta_schedule"]["linear_end"],
              "n_timestep": int(num_timesteps)},
@@ -216,4 +228,42 @@ def clean_batch(
     if out.shape[0] != x.shape[0]:
         raise RuntimeError("DM-AHR returned the wrong number of images")
     return postprocess(out), stats
+
+
+@torch.no_grad()
+def respaced_super_resolution(net, cond: torch.Tensor, steps: int = 25,
+                              seed: int | None = None,
+                              use_bf16: bool = False) -> tuple[torch.Tensor, dict]:
+    """Deterministic DDIM sampling over the trained schedule in `steps` jumps.
+
+    Uses the model's own 2,000-step alphas and visits `steps` of them evenly
+    spaced, so every denoiser call is made at a noise level the model was
+    trained on. This is what makes 25-step sampling usable.
+    """
+    if seed is not None:
+        torch.manual_seed(int(seed))
+        torch.cuda.manual_seed_all(int(seed))
+    T = int(net.num_timesteps)
+    seq = np.linspace(T - 1, 0, steps).round().astype(int)
+    seq = np.unique(seq)[::-1]  # descending, no duplicates
+    x = torch.randn(cond.shape, device=cond.device)
+    with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=use_bf16):
+        for i, t in enumerate(seq):
+            level = torch.FloatTensor(
+                [net.sqrt_alphas_cumprod_prev[t + 1]]).repeat(cond.shape[0], 1).to(cond.device)
+            eps = net.denoise_fn(torch.cat([cond, x], dim=1), level)
+            x0 = (net.sqrt_recip_alphas_cumprod[t] * x
+                  - net.sqrt_recipm1_alphas_cumprod[t] * eps).clamp(-1.0, 1.0)
+            if i == len(seq) - 1:
+                x = x0
+                break
+            t_next = int(seq[i + 1])
+            ac_next = net.alphas_cumprod[t_next]
+            # Deterministic DDIM step: re-noise x0 to the next scheduled level.
+            x = ac_next.sqrt() * x0 + (1.0 - ac_next).sqrt() * eps
+    stats = {"finite": bool(torch.isfinite(x).all()),
+             "shape": list(x.shape), "timesteps_visited": seq.tolist()}
+    if not stats["finite"]:
+        raise FloatingPointError("DM-AHR produced non-finite values")
+    return x, stats
 

@@ -22,6 +22,13 @@ log = setup_logging()
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--overfit", action="store_true")
+    ap.add_argument("--warm-start", default=None,
+                    help="checkpoint to initialise from, for sanity checks")
+    ap.add_argument("--iterations", type=int, default=None,
+                    help="override the configured iteration count")
+    ap.add_argument("--out-name", default=None,
+                    help="checkpoint subdirectory; set this for sanity runs so the "
+                         "recorded Arm C checkpoint is never overwritten")
     args = ap.parse_args()
     cfg = load_config("configs/dmahr.json")
     pairs = pd.read_csv(manifest_dir() / "synthetic_pairs.csv")
@@ -32,8 +39,11 @@ def main() -> int:
     if set(train_pairs["group_id"]) & set(val_pairs["group_id"]):
         raise RuntimeError("group leakage between diffusion train and val pairs")
 
-    out_dir = artifact_dir("checkpoints", "dmahr_overfit" if args.overfit else "dmahr")
-    result = train(cfg, train_pairs, val_pairs, out_dir, overfit=args.overfit)
+    default_name = "dmahr_overfit" if args.overfit else "dmahr"
+    out_dir = artifact_dir("checkpoints", args.out_name or default_name)
+    result = train(cfg, train_pairs, val_pairs, out_dir, overfit=args.overfit,
+                   init_from=Path(args.warm_start) if args.warm_start else None,
+                   max_iterations=args.iterations)
     save_json(result, artifact_dir("logs") / ("dmahr_overfit.json" if args.overfit else "dmahr_train.json"))
     record_run("dmahr_train_overfit" if args.overfit else "dmahr_train",
                gpu="A100-80GB", seconds=result["seconds"], iterations=result["iterations"])

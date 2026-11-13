@@ -334,3 +334,23 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
   verbatim, so training failed on any volume other than the one that wrote the
   manifests. It now re-roots on the `/data/` marker like the rest of the code.
 
+## D26 - The 25-step sampling routine is not in the repository
+
+- Finding: the `Creleased` images were produced at 25 timesteps and score
+  26.91 dB on validation pairs, but the committed code cannot reproduce that.
+  Schedule truncation to 25 steps gives 11.44 dB. A DDIM respacing I wrote gives
+  23.23 dB. The upstream `jsd` schedule diverges to non-finite values. The
+  recorded values also decrease with more steps, while mine do not, so it is a
+  different routine rather than a different parameter.
+- Decision: do not claim the repository reproduces the Creleased sampling. The
+  Creleased images and every measurement taken from them stand, because they are
+  real artefacts on the volume. Regeneration is a different matter.
+- Consequence: the earlier "$1 to regenerate 8,993 images at 25 steps" figure
+  is withdrawn. Until the original routine is recovered, regeneration is priced
+  at 2,000 steps, about $26. The report and this log now say so.
+- Kept anyway: the DDIM routine is a real improvement over truncation (23.23
+  versus 11.44 dB at 25 steps) and is used only where labelled as such, never
+  described as reproducing the recorded pipeline.
+- Evidence: `artifacts/logs/respacing_check.json`,
+  `scripts/28_respacing_check.py`.
+

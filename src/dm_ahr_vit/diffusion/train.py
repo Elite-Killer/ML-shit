@@ -103,6 +103,8 @@ def train(
     out_dir: Path,
     device: str = "cuda",
     overfit: bool = False,
+    init_from: Path | None = None,
+    max_iterations: int | None = None,
 ) -> dict:
     _ensure_path()
     import model.networks as networks  # noqa: PLC0415
@@ -124,6 +126,8 @@ def train(
     if overfit:
         pairs = pairs.head(int(cfg["train"].get("overfit_pairs", 12)))
         iterations = 500
+    if max_iterations is not None:
+        iterations = int(max_iterations)
     train_ds = PairedDataset(pairs, int(cfg["native_resolution"]))
     val_ds = PairedDataset(val_pairs, int(cfg["native_resolution"]))
     bs = int(cfg["train"]["batch_size"])
@@ -135,6 +139,14 @@ def train(
     start = 0
     best = float("inf")
     history = []
+    if init_from is not None:
+        # Warm start from an existing checkpoint. Used to check that the fixed
+        # trainer does not degrade weights it did not produce.
+        init_state = torch.load(init_from, map_location="cpu", weights_only=True)
+        if any(k.startswith("module.") for k in init_state):
+            init_state = {k.replace("module.", "", 1): v for k, v in init_state.items()}
+        net.load_state_dict(init_state, strict=True)
+        log.info("warm-started from %s", init_from)
     if state_path.exists():
         state = torch.load(state_path, map_location="cpu", weights_only=False)
         net.load_state_dict(state["model"])

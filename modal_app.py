@@ -423,6 +423,22 @@ def convention_check(pairs: int = 50):
     return _run("26_convention_check.py", ["--pairs", str(pairs)])
 
 
+@app.function(image=image, gpu="A100-80GB", timeout=7200, volumes={"/vol": vol})
+def warmstart_check(iterations: int = 1000):
+    """Warm-start the released weights with the fixed trainer, then re-score."""
+    released = "/vol/data/raw/dmahr_weights/I725000_E1083_gen.pth"
+    _run("04_dmahr_train.py", ["--warm-start", released,
+                               "--iterations", str(iterations),
+                               "--out-name", "dmahr_warmstart_check"])
+    return _run("27_warmstart_check.py")
+
+
+@app.function(image=image, gpu="A100-80GB", timeout=3600, volumes={"/vol": vol})
+def respacing_check():
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+    return _run("28_respacing_check.py")
+
+
 @app.function(image=image, cpu=8, memory=32768, timeout=7200, volumes={"/vol": vol})
 def image_quality(split: str = "test"):
     return _run("07b_image_quality.py", ["--split", split])

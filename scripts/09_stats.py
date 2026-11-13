@@ -432,6 +432,16 @@ def main() -> int:
         for metric in ("gradcam_overlap20", "rollout_overlap20"):
             out += xai_rows(metric, reps, bseed, [("A", "Astar"), (C_ARM, "Astar")])
 
+    if C_ARM != "C":
+        # A second diffusion arm: keep only rows that involve it, plus the A-A* explanation
+        # control (A-B and A-A* classification rows live in the original files unchanged).
+        out = [r for r in out if C_ARM in (r["arm_a"], r["arm_b"])
+               or (r["endpoint"].startswith("x1_") and r["comparison"] == "A-Astar")]
+        for r in out:
+            # Per-group macro-F1 is not additive, so its dz can contradict the difference
+            # (reports/prereg_v4_review_response.md, S2). Differences with CIs are reported instead.
+            if r["endpoint"] == "test_macro_f1":
+                r["effect_size_dz"] = float("nan")
     if not out:
         log.error("no statistical comparisons could be computed")
         return 1
@@ -441,6 +451,9 @@ def main() -> int:
     # planned family's correction.
     table["family"] = np.where(
         table["comparison"].str.contains("Astar"), "secondary_control", "planned")
+    if C_ARM != "C":
+        # Cv2 was designed after the Stage B gate failed (D34): every row involving it is exploratory.
+        table.loc[table["arm_a"].eq(C_ARM) | table["arm_b"].eq(C_ARM), "family"] = "exploratory"
     table["p_holm"] = np.nan
     for _, grp in table.groupby(["endpoint", "subset", "family"]):
         table.loc[grp.index, "p_holm"] = holm(grp["p_raw"].tolist())

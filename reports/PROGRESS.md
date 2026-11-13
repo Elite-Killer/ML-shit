@@ -291,3 +291,11 @@ See decision log D30. The fixed trainer was tested on validation pairs only; the
 - Pre-registered (e3d3ef6), then run: 20 extra-seed ViT evaluations (A, A*, B, Cv2 at seeds 7, 11, 17, 23, 31), pooled two-level-bootstrap analysis, composite/real-photo/condition-usage/residual-hair checks, human-review kit. Results `reports/stageE_results.md`, decision D38.
 - Eight-seed macro-F1: A 0.741, A* 0.728, Cv2 0.722, B 0.693; only A over B established; minimum detectable difference 0.04 to 0.05.
 - Open: human ratings of `artifacts/review_kit/` (needs a person). Real-photo hair removal remains unvalidated.
+
+## 2026-11-13 - Client review points: verification pass, Milestone 1 package (D39)
+
+- Verified the reviewer's claims against files; corrected premises are in `reports/milestone1_diffusion_diagnosis.md`. DERMAHAIR still blocked (no Kaggle login; unauthenticated download 404).
+- New validation-only checks: `scripts/57_paper_t10_check.py` (released checkpoint at the paper's quoted T = 10: no reproduction) and `scripts/56_xai_registration_check.py` (lesion masks are not in the model's frame, differently per arm).
+- Correction notices added to `reports/stageE_results.md` (section 6), `reports/final_research_report.md`, `reports/client_summary.md`. The Word/PDF reports and their generator scripts were NOT updated and still carry the superseded explanation reading: do not send them.
+- Plan and timeline: `reports/client_plan_and_timeline.md`. Nothing trained, nothing re-scored on the test set.
+- Open: Kaggle login or dataset copy; approval for the learning-curve run; checkpoint destination; human ratings of `artifacts/review_kit/`.

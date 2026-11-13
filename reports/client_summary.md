@@ -2,6 +2,8 @@
 
 Research prototype only. Not clinically validated and not intended for diagnosis or patient care.
 
+> **Correction (2026-11-13).** The "where the model looks" result below should not be relied on. After review we found the lesion outlines used for scoring were not lined up with the part of the photo the model actually sees, and the report described the score differently from how it was computed. The numbers are being re-measured; until then no claim about where the model looks, for or against hair removal, is supported. Details: `reports/stageE_results.md`, section 6.
+
 ## The question
 
 Does removing hair from skin-lesion photos help a computer program classify the lesion? We compared

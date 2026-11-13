@@ -165,6 +165,35 @@ def lesion_overlap(saliency: np.ndarray, mask: np.ndarray, fraction: float = 0.2
     return float((top & mask.astype(bool)).sum() / lesion_area)
 
 
+def lesion_overlap_recall(saliency: np.ndarray, mask: np.ndarray, fraction: float = 0.2) -> float:
+    """Same quantity as `lesion_overlap`: the share of the LESION covered by the top region."""
+    return lesion_overlap(saliency, mask, fraction)
+
+
+def salient_in_lesion(saliency: np.ndarray, mask: np.ndarray, fraction: float = 0.2) -> float:
+    """Fraction of the top-`fraction` salient pixels that fall inside the lesion mask.
+
+    This is the definition written in the kit, the client's paper and the explainability skill
+    ("fraction of the top-k% salient pixels that fall inside the lesion mask"). The recorded
+    results were computed with `lesion_overlap` instead, which divides by the lesion area.
+    """
+    if mask.sum() == 0:
+        return float("nan")
+    top = top_fraction_mask(saliency, fraction)
+    return float((top & mask.astype(bool)).sum() / top.sum())
+
+
+def top_region_centroid_distance(saliency: np.ndarray, mask: np.ndarray, fraction: float = 0.2) -> float:
+    """Distance between the centroid of the top region and the lesion centroid, in image widths."""
+    if mask.sum() == 0:
+        return float("nan")
+    top = top_fraction_mask(saliency, fraction)
+    ty, tx = np.nonzero(top)
+    ly, lx = np.nonzero(mask.astype(bool))
+    d = np.hypot(tx.mean() - lx.mean(), ty.mean() - ly.mean())
+    return float(d / saliency.shape[1])
+
+
 def pointing_game(saliency: np.ndarray, mask: np.ndarray, tolerance: int = 0) -> float:
     """1.0 if the argmax salience pixel falls on the lesion (optionally dilated)."""
     m = mask.astype(bool)

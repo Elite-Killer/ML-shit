@@ -79,6 +79,12 @@ All four use the condition at t=200 (shuffled gives the same picture). At t=1500
 
 ## 6. Explanation overlap: no arm beats a centre prior (`xai_localization_*_X1.csv`, per seed)
 
+> **Post-review correction (2026-11-13).** Three problems were found after this section was written. The numbers below are reported as recorded; the conclusions drawn from them are **not established** until re-measured (plan: `reports/client_plan_and_timeline.md`, Milestone 3).
+>
+> 1. **Mask frame.** The lesion mask was squashed from the whole photo to 224 x 224, but the model sees the photo resized to 255 px on the short side and centre-cropped to 224. Stored images differ by arm (A and B 600 x 450; A*, Cv2, Creleased 128 x 128), so the mismatch differs by arm. On the 1,502 validation masks (`artifacts/logs/xai_registration_val.json`; no model, no test data) the lesion occupies 0.457 of the model's frame for A and B and 0.366 for the diffusion arms, against 0.295 for the mask used here (IoU with it 0.61 and 0.79). The centred-Gaussian baseline scores 0.642 on the squashed mask and 0.466 (A, B) or 0.555 (diffusion arms) on the registered one. The between-arm comparison is confounded and "no arm beats a centre prior" is not established.
+> 2. **Metric definition.** The CSV column is the share of the *lesion* covered by the top 20% of the map (`lesion_overlap`, which is why the uniform baseline is 0.200). The text here, the proposal and the kit describe the share of the top 20% that falls *inside* the lesion. Both will be reported in the re-measurement.
+> 3. **Seed stability.** Per-image Grad-CAM overlap correlates only 0.19 to 0.54 (Spearman) between independently trained seeds; rollout correlates 0.96 to 0.99, so rollout depends little on the trained weights. Neither can be read as a property of an arm without this caveat.
+
 Share of the top 20% attention inside the lesion, X1 mask subset, n=1,502 images per arm and seed. Baselines stored in the same files: uniform 0.200, centred Gaussian **0.644**.
 
 | Arm | Grad-CAM, mean (range over 3 seeds) | Rollout, mean (range) |

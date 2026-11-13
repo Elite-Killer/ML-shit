@@ -124,15 +124,32 @@ def training_loss(net, hr: torch.Tensor, cond: torch.Tensor) -> torch.Tensor:
     return (pred - noise).abs().mean()
 
 
+def _describe(ds) -> dict:
+    """What a dataset contains, for the training manifest (pair table or composite)."""
+    if hasattr(ds, "manifest"):
+        m = ds.manifest()
+        return {"n": m["n"], "ids": m["target_ids"] + m["source_ids"],
+                "splits": m["splits"], "groups": set(m["groups"]),
+                "hash": hashlib.sha256("\n".join(sorted(m["target_ids"] + m["source_ids"]))
+                                       .encode()).hexdigest()}
+    p = ds.pairs
+    return {"n": int(len(ds)), "ids": p["pair_id"].tolist(),
+            "splits": sorted(p["split"].unique().tolist()),
+            "groups": set(p["group_id"]), "hash": _manifest_hash(p)}
+
+
 def train(
     cfg: dict,
-    pairs: pd.DataFrame,
-    val_pairs: pd.DataFrame,
+    pairs: pd.DataFrame | None,
+    val_pairs: pd.DataFrame | None,
     out_dir: Path,
     device: str = "cuda",
     overfit: bool = False,
     init_from: Path | None = None,
     max_iterations: int | None = None,
+    train_ds: Dataset | None = None,
+    val_ds: Dataset | None = None,
+    num_workers: int = 4,
 ) -> dict:
     _ensure_path()
     import model.networks as networks  # noqa: PLC0415
@@ -151,16 +168,19 @@ def train(
     )
     opt_g = torch.optim.Adam(net.parameters(), lr=float(cfg["train"]["lr"]))
     iterations = int(cfg["train"]["iterations"])
-    if overfit:
+    if overfit and pairs is not None:
         pairs = pairs.head(int(cfg["train"].get("overfit_pairs", 12)))
         iterations = 500
     if max_iterations is not None:
         iterations = int(max_iterations)
-    train_ds = PairedDataset(pairs, int(cfg["native_resolution"]))
-    val_ds = PairedDataset(val_pairs, int(cfg["native_resolution"]))
+    if train_ds is None:
+        train_ds = PairedDataset(pairs, int(cfg["native_resolution"]))
+    if val_ds is None:
+        val_ds = PairedDataset(val_pairs, int(cfg["native_resolution"]))
     bs = int(cfg["train"]["batch_size"])
     train_loader = DataLoader(train_ds, batch_size=bs, shuffle=True, drop_last=True,
-                              num_workers=4, pin_memory=True)
+                              num_workers=int(num_workers), pin_memory=True,
+                              persistent_workers=int(num_workers) > 0)
     val_loader = DataLoader(val_ds, batch_size=bs, shuffle=False, num_workers=2)
 
     state_path = out_dir / ("overfit_state.pt" if overfit else "train_state.pt")
@@ -184,19 +204,18 @@ def train(
         history = state.get("history", [])
         log.info("resumed DM-AHR at iteration %d", start)
 
+    d_tr, d_va = _describe(train_ds), _describe(val_ds)
     save_json(
         {
             "config": cfg,
             "opt_hash": opt_hash(opt),
-            "train_pairs": int(len(train_ds)),
-            "val_pairs": int(len(val_ds)),
-            "train_pair_ids": train_ds.pairs["pair_id"].tolist(),
-            "val_pair_ids": val_ds.pairs["pair_id"].tolist(),
-            "train_sources_splits": sorted(train_ds.pairs["split"].unique().tolist()),
-            "val_sources_splits": sorted(val_ds.pairs["split"].unique().tolist()),
-            "leakage_check": bool(
-                not set(train_ds.pairs["group_id"]) & set(val_ds.pairs["group_id"])
-            ),
+            "train_pairs": d_tr["n"],
+            "val_pairs": d_va["n"],
+            "train_pair_ids": d_tr["ids"],
+            "val_pair_ids": d_va["ids"],
+            "train_sources_splits": d_tr["splits"],
+            "val_sources_splits": d_va["splits"],
+            "leakage_check": bool(not d_tr["groups"] & d_va["groups"]),
             "overfit": overfit,
             # Provenance recorded at run time so a later audit does not have to
             # infer which noise-level convention or which data this run used.
@@ -206,7 +225,8 @@ def train(
             "ema": "none",
             "batch_size": int(cfg["train"]["batch_size"]),
             "init_from": str(init_from) if init_from is not None else None,
-            "train_manifest_sha256": _manifest_hash(train_ds.pairs),
+            "train_manifest_sha256": d_tr["hash"],
+            "dataset_kind": type(train_ds).__name__,
         },
         out_dir / "training_manifest.json",
     )

@@ -3,23 +3,28 @@
 Does diffusion-based hair removal (DM-AHR) change dermoscopic classification or
 explanation quality compared with a classical DullRazor-style baseline?
 
-Five input arms on HAM10000 with a frozen, lesion-grouped split:
+Six input arms on HAM10000 with a frozen, lesion-grouped split:
 
 | Arm | Input |
 |---|---|
 | A | original image |
 | B | DullRazor-style morphology + Telea inpainting |
-| C | DM-AHR diffusion hair removal |
+| C | first diffusion run (defective trainer, recorded failure) |
+| Cv2 | rebuilt diffusion hair removal (repaired trainer, partial-noise sampler, real-strand fine-tune) |
 | A* | original at 128px, controlling DM-AHR's resolution change |
 | Creleased | the authors' released DM-AHR checkpoint, 25-step respaced sampling (exploratory) |
 
-Arm C is our own diffusion run at 20,000 iterations. It was trained with a
+Arm C is our first diffusion run at 20,000 iterations. It was trained with a
 script that gave the network an inverted noise-level signal, so it is a failed
 replication and says nothing about DM-AHR as published (see
-`reports/oneshot_diagnostic_report.md`). Creleased runs the released weights
+`reports/oneshot_diagnostic_report.md`). Arm Cv2 is the rebuilt arm: repaired
+trainer, sampler that starts from the noised input, fine-tune on real hair
+strands pasted onto clean photos. Its pre-registered real-photo gate was **not
+met**, and it was run on the test split anyway as a recorded deviation
+(`reports/stageC_results.md`, decision D34). Creleased runs the released weights
 through the same pipeline; it was added after the protocol was frozen and is
 reported as exploratory, and its sampling routine is not reproducible from this
-repository. See `reports/decision_log.md` (D1, D12, D22, D26).
+repository. See `reports/decision_log.md` (D1, D12, D22, D26, D34).
 
 ImageNet-pretrained ViT-B/16, seven classes, seeds 42/123/2026, plus paired
 PSNR/SSIM on held-out synthetic pairs and Grad-CAM / attention-rollout
@@ -99,6 +104,29 @@ modal run modal_app.py::xai_run --arm A --seed 42
 modal run modal_app.py::stats_run
 modal run modal_app.py::acceptance
 modal run modal_app.py::finalize
+```
+
+### Rebuilt diffusion arm (Cv2): Stage B and Stage C
+
+Arm C above is the first diffusion run, made with the defective trainer; it is kept as a recorded
+failure. The rebuilt arm is described in `reports/prereg_v2_diffusion.md` (Stage A, B) and
+`reports/protocol_addendum_stageC.md` (Stage C); results are in `reports/stageC_results.md`.
+
+```bash
+# Harvest real hair strands from train/validation images, then fine-tune on composites
+modal run modal_app.py::harvest_hair
+modal run --detach modal_app.py::dmahr_train_v2 --iterations 20000 --out-name dmahr_v2
+
+# Validation-only checks (never the test split)
+modal run modal_app.py::partial_noise_eval --ckpt <path> --name <n> --tag <t>
+modal run modal_app.py::composite_eval --ckpts "name=<path>" --tag <t>
+
+# Stage C: sample Cv2 (partial-noise start 600, 50 DDIM steps), train/evaluate ViTs, statistics
+modal run modal_app.py::fill_cv2_passthrough
+modal run --detach modal_app.py::cv2_sample_driver --n-shards 4 --pairs-split test
+modal run --detach modal_app.py::vit_arm_driver --arm Cv2 --seeds 42,123,2026
+modal run modal_app.py::image_quality_arm --split test --c-arm Cv2
+modal run modal_app.py::stats_arm --c-arm Cv2
 ```
 
 ## Local tests (no GPU, no Modal)

@@ -26,8 +26,25 @@ h1, h2, body, bullet, table, callout, figure = (
     pre.h1, pre.h2, pre.body, pre.bullet, pre.table, pre.callout, pre.figure)
 add_page_number = pre.add_page_number
 ARM_LABEL = {"A": "A — original", "Astar": "A* — 128 px control",
-             "B": "B — DullRazor classical", "C": "C — DM-AHR diffusion",
-             "Creleased": "Creleased — released ckpt"}
+             "B": "B — DullRazor classical",
+             "C": "C — first diffusion run (defective trainer)",
+             "Creleased": "Creleased — released ckpt",
+             "Cv2": "Cv2 — rebuilt diffusion"}
+REPO = Path(__file__).resolve().parents[1]
+
+
+def cv2_seed_metrics(subset: str = "full") -> dict:
+    """Mean/SD over seeds of the Cv2 test metrics, read from the per-seed metric files."""
+    import numpy as np
+
+    vals: dict[str, list] = {"macro_f1": [], "accuracy": [], "balanced_accuracy": [],
+                             "auc_macro": []}
+    pred = artifact_dir("predictions")
+    for s in (42, 123, 2026):
+        m = json.loads((pred / f"metrics_Cv2_seed{s}.json").read_text())["metrics"]
+        for k in vals:
+            vals[k].append(m[f"Cv2|{s}|{subset}"][k])
+    return {k: (float(np.mean(v)), float(np.std(v, ddof=1)), v) for k, v in vals.items()}
 
 OUT = artifact_dir("reports") / "Results_Report.docx"
 
@@ -100,18 +117,20 @@ def build() -> Path:
 
     best = full.loc[full["macro_f1_mean"].idxmax()]
     worst = full.loc[full["macro_f1_mean"].idxmin()]
+    cv2m = cv2_seed_metrics("full")
     callout(doc, "In one sentence",
-            f"Across 15 trained models (5 arms × 3 seeds) evaluated once on a locked test set of "
+            f"Across 18 trained models (6 arms × 3 seeds) evaluated on a locked test set of "
             f"1,502 images, the best arm was {ARM_LABEL[best['arm']]} at macro-F1 "
-            f"{best['macro_f1_mean']:.3f}. Our own diffusion arm "
-            f"{ARM_LABEL[worst['arm']]} ({worst['macro_f1_mean']:.3f}) was far behind, and the "
-            f"authors' released checkpoint (Creleased, "
-            f"{full[full['arm'] == 'Creleased']['macro_f1_mean'].iloc[0]:.3f}) closed most of that "
-            f"gap but did not beat the original images, and its difference from classical "
-            f"DullRazor was inconclusive. The honest conclusion is that the question was not "
-            f"properly tested: on real hair the released checkpoint leaves the hair in place and "
-            f"our DullRazor arm damages lesions, so neither method cleanly removed hair. Original "
-            f"images scored best, but that cannot be read as proof that hair removal does not help.")
+            f"{best['macro_f1_mean']:.3f}. Our first diffusion run "
+            f"({worst['macro_f1_mean']:.3f}) failed because of a training-script defect. After "
+            f"repairing it, retraining and teaching the model with real hair strands, the "
+            f"rebuilt arm Cv2 scored {cv2m['macro_f1'][0]:.3f} ± {cv2m['macro_f1'][1]:.3f}, "
+            f"statistically indistinguishable from the original images, the 128 px control and "
+            f"classical DullRazor (section 8). On synthetic test pairs DullRazor recovered the "
+            f"clean image better than the diffusion arm. The pre-registered check that the "
+            f"rebuilt model removes real hair from photographs was not met, so this study does "
+            f"not show that hair removal helps or hurts classification, and removal on real "
+            f"photographs is supported only by a 12-image visual look and a pasted-strand test.")
     doc.add_page_break()
 
     h1(doc, "1. What was trained and how")
@@ -363,8 +382,10 @@ def build() -> Path:
          "sampler's sqrt(alphas_cumprod_prev)), so the model ran 20,000 iterations learning the "
          "wrong mapping; it was also sampled at 1,000 steps against 2,000 and upsampled from "
          "128 px to 224. The upstream config's n_iter is 660,000 and the released checkpoint is "
-         "named I725000_E1083. The fixed script did not reach usable sampling at the budgets "
-         "tried. Arm C's results describe that defective run, not the published method."),
+         "named I725000_E1083. The fixed script, sampled from pure noise at the budgets "
+         "tried, did not give usable output; the partial-noise sampler used for Cv2 did. "
+         "Arm C's results describe that defective run, not the published method. The "
+         "rebuilt arm Cv2 (section 8) is the fair test of the method."),
         ("Arm B damages lesions on real hair — ",
          "On 8 real-hair training images reviewed, our frozen DullRazor settings replaced lesion "
          "and skin texture with blocky inpainting patches, and in one image erased the lesion (a "
@@ -407,7 +428,96 @@ def build() -> Path:
     ]:
         bullet(doc, txt, lead)
 
-    h1(doc, "8. Reproducibility")
+    h1(doc, "8. Stage C: the rebuilt diffusion arm (Cv2)")
+    body(doc,
+         "The first diffusion run (arm C) failed because of the training defect described above. "
+         "The trainer was repaired and the model retrained. A partial-noise sampler (start from "
+         "the noised input at level 600 of 2,000, 50 strided DDIM steps) replaced sampling from "
+         "pure noise, and the model was fine-tuned for 20,000 iterations on real hair strands "
+         "harvested from train-split photos and pasted onto clean train-split photos. The "
+         "procedure, checkpoint hash, sampler and endpoints were written down before any "
+         "test-split use of the new model (reports/protocol_addendum_stageC.md); each of the "
+         "three Cv2 classifiers was evaluated once on the test split.")
+    stats_cv2 = pd.read_csv(logs / "statistical_comparisons_Cv2.csv")
+    q2 = pd.read_csv(logs / "paired_psnr_ssim_test_Cv2.csv")
+    cv2h = cv2_seed_metrics("hair_present")
+    h2(doc, "Classification")
+    def seedcell(a, col):
+        r = seed[(seed["arm"] == a) & (seed["subset"] == col)].iloc[0]
+        return f"{r['macro_f1_mean']:.3f} ± {r['macro_f1_sd']:.3f}"
+    table(doc, ["Arm", "Full test (n=1,502)", "Hair-present (n=1,316)"],
+          [[ARM_LABEL[a], seedcell(a, "full"), seedcell(a, "hair_present")]
+           for a in ("A", "Astar", "B")] +
+          [[ARM_LABEL["Cv2"], f"{cv2m['macro_f1'][0]:.3f} ± {cv2m['macro_f1'][1]:.3f}",
+            f"{cv2h['macro_f1'][0]:.3f} ± {cv2h['macro_f1'][1]:.3f}"],
+           [ARM_LABEL["C"], seedcell("C", "full"), seedcell("C", "hair_present")]],
+          widths=[2.9, 1.7, 1.7], align_right_from=1)
+    for comp, label in (("A-B", "A vs B"), ("A-Cv2", "A vs Cv2"), ("B-Cv2", "B vs Cv2"),
+                        ("Cv2-Astar", "Cv2 vs A* (resolution control)")):
+        bullet(doc, f"{verdict(row(stats_cv2, 'test_macro_f1', comp, 'full'))}; Holm p "
+                    f"{row(stats_cv2, 'test_macro_f1', comp, 'full')['p_holm']:.3f}.", label + ": ")
+    body(doc, "Only the original-over-DullRazor difference is clear. The rebuilt arm cannot be "
+              "told apart from the originals, the 128 px control or DullRazor. The secondary "
+              "Wilcoxon test gives small p-values for B vs Cv2 and Cv2 vs A*, but with effect "
+              "sizes below 0.06 and bootstrap intervals that include zero these are not read as "
+              "findings.", size=9.5)
+    h2(doc, "Image quality on the 186 synthetic test pairs")
+    mq = {c: q2[c].mean() for c in ("hairy_input_psnr", "B_psnr", "Cv2_psnr", "Creleased_psnr",
+                                    "hairy_input_ssim", "B_ssim", "Cv2_ssim", "Creleased_ssim")}
+    table(doc, ["Input", "PSNR (dB)", "SSIM"],
+          [["Hairy input", f"{mq['hairy_input_psnr']:.2f}", f"{mq['hairy_input_ssim']:.3f}"],
+           ["B — DullRazor", f"{mq['B_psnr']:.2f}", f"{mq['B_ssim']:.3f}"],
+           ["Cv2 — rebuilt diffusion", f"{mq['Cv2_psnr']:.2f}", f"{mq['Cv2_ssim']:.3f}"],
+           ["Creleased (its own sampler)", f"{mq['Creleased_psnr']:.2f}",
+            f"{mq['Creleased_ssim']:.3f}"]],
+          widths=[3.0, 1.5, 1.5], align_right_from=1)
+    r_b = row(stats_cv2, "paired_psnr", "Cv2-B")
+    r_h = row(stats_cv2, "paired_psnr", "Cv2-hairy input")
+    body(doc, f"Cv2 improves on the hairy input by {float(r_h['difference']):+.2f} dB (95% CI "
+              f"{float(r_h['ci_low']):+.2f} to {float(r_h['ci_high']):+.2f}) but is "
+              f"{float(r_b['difference']):+.2f} dB against DullRazor (CI "
+              f"{float(r_b['ci_low']):+.2f} to {float(r_b['ci_high']):+.2f}). The fidelity "
+              "hypothesis is not supported on these pairs. The synthetic hair is simple dark "
+              "curves that the detector finds exactly, DullRazor repairs only those pixels, and "
+              "the diffusion model regenerates the whole 128 px image and loses fine detail. "
+              "The pairs say nothing about real hair.", size=9.5)
+    h2(doc, "Explanation overlap (X1 subset; top 20% attention inside the lesion)")
+    def arm_means(metric: str) -> dict:
+        # Lesion-group means the statistics use, so table and intervals agree.
+        a_as = row(stats_cv2, metric, "A-Astar")
+        return {"A": float(a_as["arm_a_mean"]), "Astar": float(a_as["arm_b_mean"]),
+                "B": float(row(stats_cv2, metric, "A-B")["arm_b_mean"]),
+                "Cv2": float(row(stats_cv2, metric, "A-Cv2")["arm_b_mean"])}
+    gm, rm = arm_means("x1_gradcam_overlap20"), arm_means("x1_rollout_overlap20")
+    table(doc, ["Arm", "Grad-CAM overlap", "Rollout overlap"],
+          [[ARM_LABEL[a], f"{gm[a]:.3f}", f"{rm[a]:.3f}"] for a in ("A", "Astar", "B", "Cv2")],
+          widths=[3.0, 1.5, 1.5], align_right_from=1)
+    g = row(stats_cv2, "x1_gradcam_overlap20", "Cv2-Astar")
+    ro = row(stats_cv2, "x1_rollout_overlap20", "Cv2-Astar")
+    body(doc, f"Against the resolution-matched control A*, Grad-CAM overlap does not differ "
+              f"({float(g['difference']):+.3f}, CI {float(g['ci_low']):+.3f} to "
+              f"{float(g['ci_high']):+.3f}), so the gain over A comes from the 128 px resolution. "
+              f"Rollout overlap is higher by {float(ro['difference']):+.3f} (CI "
+              f"{float(ro['ci_low']):+.3f} to {float(ro['ci_high']):+.3f}), a small gain whose "
+              "interval leaves out seed-to-seed variation; Cv2 exceeds A* in two of three seeds. "
+              "The A* rows were added to the statistics after the planned rows had been seen.",
+         size=9.5)
+    h2(doc, "What is and is not validated")
+    bullet(doc, "the Stage B gate for removing hair from real photographs was not met "
+                "(inside/outside ratio 1.95 and 1.57 against 2.0; follow-up composite rule 0.14 "
+                "and 0.15 against 0.20). Stage C ran anyway as a recorded deviation (decision "
+                "D34).", "Gate not met — ")
+    bullet(doc, "an agent-reviewed look at 12 dense-hair validation photos shows nearly all hair "
+                "removed with lesion outline and colour kept and fine texture lost; the "
+                "ground-truth test on pasted real strands removes 77% of strand error at "
+                "t0=600. This is supporting evidence, not a passed pre-registered test.",
+           "What supports removal on photographs — ")
+    figure(doc, REPO / "artifacts" / "diagnosis" / "dense_hair_sheet_stageB_val_a.png",
+           "Validation photos with dense hair. Columns: original, DullRazor, first fixed model, "
+           "rebuilt model at t0=600, rebuilt model at t0=1000 (128 px, agent-reviewed).",
+           width=5.6)
+
+    h1(doc, "9. Reproducibility")
     if repro:
         bullet(doc, f"Arm A seed 42 re-run from scratch reproduced validation macro-F1 exactly "
                     f"({repro['recorded']['best_val_macro_f1']:.6f} vs "

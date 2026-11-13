@@ -606,6 +606,9 @@ measured per-unit costs.
 ## 13. What is deliberately not claimed
 - That diffusion hair removal helps or harms classification in general. The tested model was
   a failed replication.
+- That classical hair removal hurts classification. Our frozen DullRazor settings damage lesions
+  on real hair, so the original-against-DullRazor gap is confounded.
+- That any arm cleanly removed real hair. The released diffusion model left real hair in place.
 - That the explanations show clinically correct reasoning. They show spatial alignment with released
   masks.
 - That the hair detector is validated on real hair. No independent annotations exist.

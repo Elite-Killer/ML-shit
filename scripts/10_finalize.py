@@ -197,7 +197,7 @@ def hypothesis_section(stats: pd.DataFrame, summ: pd.DataFrame) -> str:
         "opposite to the one the sampler uses (see the Arm C paragraph and "
         "`reports/oneshot_diagnostic_report.md`). Arm C therefore says nothing about "
         "DM-AHR as published. The released checkpoint, scored through the same "
-        "adapter (Creleased, exploratory), clears the hairy-input floor but sits "
+        "adapter on synthetic hair (Creleased, exploratory), clears the hairy-input floor but sits "
         "below classical inpainting, so H1 is not supported for the released weights "
         "either; that arm's sampling routine is not reproducible from this "
         "repository and its training data is not verified to exclude our test images.")
@@ -212,8 +212,17 @@ def hypothesis_section(stats: pd.DataFrame, summ: pd.DataFrame) -> str:
         "is the output of a defective training script (inverted noise-level signal; "
         "see the Arm C paragraph). This is a true statement about the model that was "
         "run, not a refutation of the published method. The exploratory "
-        "released-checkpoint arm is the only diffusion arm that produced usable "
-        "hair removal.")
+        "released-checkpoint arm reproduces synthetic hair removal well but leaves "
+        "real hair in place (see the real-hair check), so it is not a test of hair "
+        "removal either.")
+    out.append("")
+
+    out.append(
+        f"**A vs B (original against classical removal): "
+        f"{_verdict(_row(stats, 'test_macro_f1', 'A-B', 'full'))}.** This must not be "
+        "read as evidence that hair removal hurts classification: the real-hair check "
+        "shows that our frozen DullRazor settings damage lesions, so the gap is "
+        "confounded with image damage and was not separated from it.")
     out.append("")
 
     gradcam_c = _row(stats, "x1_gradcam_overlap20", "A-C")
@@ -275,6 +284,9 @@ def build_report() -> str:
              "classification and explanation localization relative to the classical "
              "baseline. The results below are reported as measured; a null or negative "
              "result is a valid outcome and is not reframed.\n")
+    L.append("Neither hair-removal method cleanly removed real hair (see the real-hair "
+             "check below), so the classification comparison does not establish whether "
+             "hair removal helps or hurts.\n")
 
     L.append("## Cohort and splits\n")
     L.append(f"- Collection 212 images: {audit.get('collection_total')}\n"
@@ -386,6 +398,22 @@ def build_report() -> str:
                  "retrain was scored on validation pairs only. Our own diffusion arm "
                  "is therefore reported as a failed replication, not as evidence "
                  "about DM-AHR.\n")
+
+    L.append("\n**Real-hair check.** Every image-quality number above is measured on "
+             "synthetic hair overlays. A separate check on 40 hairy training images "
+             "with real hair (test set not used; `artifacts/diagnosis/real_hair_check.json`, "
+             "`reports/hair_check_prereg.md`) found that the released DM-AHR model leaves "
+             "real hair in place: it changes hair pixels about as much as other pixels "
+             "(inside/outside change ratio 1.13, against 21.7 for DullRazor) and the "
+             "strands are visibly intact in the contact sheet. Our DullRazor arm does "
+             "remove hair, but in all 8 images reviewed it replaced lesion and skin "
+             "texture with blocky inpainting patches, and in one it erased the whole "
+             "lesion (a dark lesion and marker ink were read as hair); the likely cause "
+             "is the frozen detector and inpainting settings. Neither arm therefore "
+             "removed real hair cleanly. One pre-registered control failed (the "
+             "detector-coverage measure, which is void at 128 px); the conclusion rests "
+             "on the change ratio, whose control passed. The 40-image sample is biased "
+             "toward heavy hair.\n")
 
     L.append("## Explainability\n")
     xai_files = sorted(artifact_dir("logs").glob("xai_summary_*.json"))
@@ -514,14 +542,20 @@ def build_report() -> str:
              "failed replication and not DM-AHR as published.\n")
     L.append("- Creleased uses the authors' released weights. The sampling routine "
              "that produced its images is not in this repository and cannot be "
-             "regenerated from committed code (decision log D26). Its training data "
-             "(DERMAHAIR) was not available to us and its per-class configs use the "
-             "HAM10000 diagnosis names, so overlap with our test images cannot be "
-             "ruled out.\n")
+             "regenerated from committed code (decision log D26). The DM-AHR paper "
+             "states that the model was trained on HAM10000 images other than a "
+             "700-image test set, so it very probably saw our validation and test "
+             "images; it used no labels, so this mainly affects image-fidelity "
+             "numbers.\n")
+    L.append("- The released model leaves real hair in place and our DullRazor arm "
+             "damages lesions on real hair (see the real-hair check). The "
+             "original-against-DullRazor difference is confounded with that damage "
+             "and is not evidence about hair removal in general. Re-tuning Arm B on "
+             "training and validation images would address it; that was not done.\n")
     L.append("- `df` and `vasc` have very small test supports, so their per-class "
              "numbers are noisy.\n")
-    L.append("- The released DM-AHR weights have undocumented training data and are "
-             "used for exploration only.\n")
+    L.append("- The released DM-AHR weights were trained on HAM10000-derived images "
+             "(per the paper) and are used for exploration only.\n")
     L.append("- Augmentation differs from the proposal's wording: rotation is ±15° "
              "and uses a resized crop, where the proposal asks for ±90° rotation and "
              "explicit zoom/shift. The recipe is identical across arms, so the "

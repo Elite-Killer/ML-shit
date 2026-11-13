@@ -150,6 +150,7 @@ def train(
     train_ds: Dataset | None = None,
     val_ds: Dataset | None = None,
     num_workers: int = 4,
+    grad_clip: float | None = 1.0,
 ) -> dict:
     _ensure_path()
     import model.networks as networks  # noqa: PLC0415
@@ -223,6 +224,7 @@ def train(
                                       "continuous in [t-1, t] (upstream p_losses)",
             "num_timesteps": int(net.num_timesteps),
             "ema": "none",
+            "grad_clip": float(grad_clip) if grad_clip else None,
             "batch_size": int(cfg["train"]["batch_size"]),
             "init_from": str(init_from) if init_from is not None else None,
             "train_manifest_sha256": d_tr["hash"],
@@ -243,7 +245,8 @@ def train(
         loss = training_loss(net, hr, cond)
         opt_g.zero_grad(set_to_none=True)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
+        if grad_clip:
+            torch.nn.utils.clip_grad_norm_(net.parameters(), float(grad_clip))
         opt_g.step()
 
         if step % 100 == 0:

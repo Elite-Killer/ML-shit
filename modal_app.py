@@ -702,6 +702,75 @@ def xai_v2_all(split: str = "test"):
         print("done", res, flush=True)
 
 
+@app.function(image=image, gpu="A100-40GB", timeout=14400, volumes={"/vol": vol})
+def dermahair_repro(commit: str):
+    """Released checkpoint on DERMAHAIR (scripts/62_dermahair_repro.py)."""
+    return _run("62_dermahair_repro.py", ["--commit", commit])
+
+
+@app.local_entrypoint()
+def dermahair_run():
+    print(dermahair_repro.remote(_clean_commit()))
+
+
+@app.function(image=image, cpu=4, memory=16384, timeout=1800, volumes={"/vol": vol})
+def contract_tests():
+    """Trainer/sampler contract tests, including the two that need the real pair manifest."""
+    diag = "/tmp/diag"
+    os.makedirs(diag, exist_ok=True)
+    for link, target in (("man", "/vol/data/manifests"), ("data", "/vol/data")):
+        if not os.path.exists(f"{diag}/{link}"):
+            os.symlink(target, f"{diag}/{link}")
+    os.environ["DMAHR_DIAG_ROOT"] = diag
+    cmd = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-rs",
+           "tests/test_trainer_sampler_contract.py", "tests/test_noise_level_convention.py",
+           "tests/test_trainer_resume.py", "tests/test_partial_noise_sampler.py"]
+    proc = subprocess.run(cmd, cwd=REMOTE_ROOT, capture_output=True, text=True)
+    print(proc.stdout[-3000:], proc.stderr[-1000:], flush=True)
+    if proc.returncode != 0:
+        raise RuntimeError("contract tests failed")
+    return proc.stdout.strip().splitlines()[-1]
+
+
+@app.function(image=image, gpu="A100-80GB", timeout=86400, volumes={"/vol": vol},
+              retries=modal.Retries(max_retries=3, initial_delay=10.0))
+def lc_train(out_name: str, iterations: int, grad_clip: float, commit: str):
+    """Learning curve: continue the repaired-trainer run from its 56,000-iteration state into a
+    new directory (nothing recorded is overwritten). Resumable: reruns continue from train_state.pt."""
+    import shutil  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    import torch  # noqa: PLC0415
+
+    root = Path(os.environ.get("ARTIFACT_ROOT", "/vol/artifacts")) / "checkpoints"
+    dst = root / out_name
+    dst.mkdir(parents=True, exist_ok=True)
+    if not (dst / "train_state.pt").exists():
+        state = torch.load(root / "dmahr" / "train_state.pt", map_location="cpu", weights_only=False)
+        print("start state: iteration", state["iteration"], "commit", commit, flush=True)
+        if int(state["iteration"]) != 56000:
+            raise RuntimeError(f"unexpected start iteration {state['iteration']}")
+        shutil.copy2(root / "dmahr" / "train_state.pt", dst / "train_state.pt")
+        vol.commit()
+    return _run("04_dmahr_train.py", ["--out-name", out_name, "--iterations", str(iterations),
+                                      "--grad-clip", str(grad_clip)])
+
+
+@app.function(image=image, gpu="A100-40GB", timeout=14400, volumes={"/vol": vol})
+def lc_eval(ckpts: str, commit: str):
+    return _run("63_learning_curve_eval.py", ["--ckpts", ckpts, "--commit", commit])
+
+
+@app.local_entrypoint()
+def lc_start(iterations: int = 100000):
+    """Clipped continuation and the no-clip comparison, same start state, run side by side."""
+    commit = _clean_commit()
+    calls = [lc_train.spawn("dmahr_lc", iterations, 1.0, commit),
+             lc_train.spawn("dmahr_lc_noclip", iterations, 0.0, commit)]
+    for c in calls:
+        print("finished", c.get(), flush=True)
+
+
 @app.function(image=image, gpu="A100-80GB", timeout=14400, volumes={"/vol": vol})
 def xai_run(arm: str, seed: int):
     return _run("08_xai.py", ["--arm", arm, "--seed", str(seed)])

@@ -40,6 +40,8 @@ def main() -> int:
     ap.add_argument("--composite", action="store_true",
                     help="train on real-hair composites instead of the pair manifest")
     ap.add_argument("--num-workers", type=int, default=4)
+    ap.add_argument("--grad-clip", type=float, default=1.0,
+                    help="gradient-norm clip; 0 removes clipping (upstream does not clip)")
     args = ap.parse_args()
     cfg = load_config("configs/dmahr.json")
     log.info("cpu_count=%s workers=%d composite=%s", os.cpu_count(), args.num_workers,
@@ -55,7 +57,7 @@ def main() -> int:
         result = train(cfg, None, None, out_dir, init_from=(
             Path(args.warm_start) if args.warm_start else None),
             max_iterations=args.iterations, train_ds=train_ds, val_ds=val_ds,
-            num_workers=args.num_workers)
+            num_workers=args.num_workers, grad_clip=args.grad_clip)
         tag = "dmahr_train_composite"
     else:
         pairs = pd.read_csv(manifest_dir() / "synthetic_pairs.csv")
@@ -67,7 +69,7 @@ def main() -> int:
             raise RuntimeError("group leakage between diffusion train and val pairs")
         result = train(cfg, train_pairs, val_pairs, out_dir, overfit=args.overfit,
                        init_from=Path(args.warm_start) if args.warm_start else None,
-                       max_iterations=args.iterations)
+                       max_iterations=args.iterations, grad_clip=args.grad_clip)
         tag = "dmahr_train_overfit" if args.overfit else "dmahr_train"
     if args.out_name is None or args.composite:
         log_name = f"{args.out_name or 'dmahr'}_train.json" if args.composite else (

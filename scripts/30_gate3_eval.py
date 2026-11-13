@@ -45,6 +45,9 @@ def main() -> int:
     ap.add_argument("--tag", default="gate3")
     ap.add_argument("--precision", choices=["bf16", "fp32"], default="bf16",
                     help="sampler autocast; bf16 was the original default")
+    ap.add_argument("--replicate-first", type=int, default=0,
+                    help="sample the first pair this many times with different noise "
+                         "instead of scoring --pairs distinct pairs")
     args = ap.parse_args()
 
     cfg = load_config("configs/dmahr.json")
@@ -60,6 +63,8 @@ def main() -> int:
 
     pairs = pd.read_csv(manifest_dir() / "synthetic_pairs.csv")
     val = pairs[pairs["split"] == "val"].head(args.pairs).reset_index(drop=True)
+    if args.replicate_first:
+        val = pd.concat([val.head(1)] * args.replicate_first).reset_index(drop=True)
     refs, conds = [], []
     for r in val.itertuples(index=False):
         with Image.open(_resolve_manifest_path(r.reference_path)) as fh:
@@ -77,7 +82,8 @@ def main() -> int:
     ps, ss, fps, fss = [], [], [], []
     for start in range(0, len(val), 8):
         sl = slice(start, start + 8)
-        outs, _ = clean_batch(net, conds[sl], cfg, device=device, seed=42,
+        outs, _ = clean_batch(net, conds[sl], cfg, device=device,
+                              seed=42 + (start if args.replicate_first else 0),
                               num_timesteps=SAMPLE_STEPS,
                               use_bf16=(args.precision == "bf16"))
         for o, ref, h in zip(outs, refs[sl], conds[sl]):

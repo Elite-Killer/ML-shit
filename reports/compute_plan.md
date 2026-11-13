@@ -81,3 +81,17 @@ Every job appends wall-clock seconds and GPU type to
 `artifacts/logs/run_registry.jsonl`. The authoritative spend figure is the sum
 over that file, not this projection.
 
+
+## Addendum 2026-11-13: retrain and checks (A100-80GB, Modal account motog5g987)
+
+The run registry under-records this work: the evaluation jobs wrote 0 seconds and the continuation was stopped before it could record its time. The figures below come from job logs and are estimates. The Modal price per GPU-hour was not verified; $2.5 is the rate used in earlier estimates.
+
+| Job | Wall-clock | Source |
+|---|---:|---|
+| Fixed-trainer retrain, 20,000 iterations | 1,220 s | training log |
+| Continuation to 56,300 iterations (stopped by the owner) | about 3,590 s | training log |
+| About 15 evaluation and replicate jobs (24 pairs or fewer, 2,000 sampling steps) | roughly 30 to 45 min in total | job logs, rough |
+| Total GPU time | about 2 hours | sum |
+| Estimated cost | about $5 | at $2.5 per GPU-hour, price unverified |
+
+CPU-only diagnostics ran on the development sandbox and are not billed to Modal. The 20,000 to 100,000 plan was cut at 56,300 iterations, so the planned 1.9 GPU-hours were not fully spent.

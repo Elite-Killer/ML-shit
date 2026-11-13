@@ -225,8 +225,9 @@ log, rather than by substituting a different model.
 
 Trains DM-AHR on **train-split sources only**, selecting on validation.
 
-*Why not use the released weights:* their training data is undocumented. Using them could leak test
-images into Arm C through an unknown training set. The released weights are used for the smoke test
+*Why not use the released weights:* the DM-AHR paper says they were trained on HAM10000 images other
+than a 700-image test set, so they very probably saw our validation and test images. Using them
+could leak test images into Arm C. The released weights are used for the smoke test
 only, never for Arm C.
 
 *Deviation:* 20,000 iterations against 660,000 in the upstream config, and a training script that
@@ -606,6 +607,9 @@ measured per-unit costs.
 ## 13. What is deliberately not claimed
 - That diffusion hair removal helps or harms classification in general. The tested model was
   a failed replication.
+- That classical hair removal hurts classification. Our frozen DullRazor settings damage lesions
+  on real hair, so the original-against-DullRazor gap is confounded.
+- That any arm cleanly removed real hair. The released diffusion model left real hair in place.
 - That the explanations show clinically correct reasoning. They show spatial alignment with released
   masks.
 - That the hair detector is validated on real hair. No independent annotations exist.

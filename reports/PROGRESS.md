@@ -55,7 +55,8 @@ Test macro-F1, mean ± SD over 3 seeds, 1,502 test images:
 | C DM-AHR (1,000-step ablation) | 0.426 | — | — |
 
 - **A vs B**: +0.052 macro-F1, 95% CI [0.019, 0.087], p_holm = 0.0012.
-  DullRazor-style removal *hurts* classification on this cohort.
+  Do not read this as evidence that hair removal hurts: our DullRazor settings
+  damage lesions on real hair (decision log D31), so the gap is confounded.
 - **A vs A***: +0.018, CI [-0.008, 0.045], p_holm = 0.167. The 128 px
   resolution change alone is not a significant effect.
 - **A vs C**: +0.324, CI [0.283, 0.366], p_holm < 0.0001. Arm C is far worse

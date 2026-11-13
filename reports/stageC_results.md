@@ -2,6 +2,8 @@
 
 Research prototype only. Not clinically validated and not intended for diagnosis, triage or patient care.
 
+> **Partly superseded (2026-11-13, Stage E).** The three-seed means, SDs and intervals below omit training-seed variance, the Cv2 rows were labelled "planned" (they are exploratory), and macro-F1 effect sizes (dz) are not interpretable. The pooled eight-seed analysis with a two-level bootstrap is in `reports/stageE_results.md` and replaces the Cv2 classification comparisons here. The image-quality and explanation tables below are unchanged; explanation overlap should not be used for between-arm claims (arm A swings by 0.22 across seeds, and every arm is below the centred-Gaussian baseline 0.644).
+
 This document reports the one run of the rebuilt diffusion arm against the locked test split, under `reports/protocol_addendum_stageC.md` (committed before any test use of the new model). Every number traces to a file in `artifacts/`.
 
 ## What was run

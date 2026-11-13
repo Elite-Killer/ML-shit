@@ -631,6 +631,12 @@ def residual_hair_split(ids_gate: str, ids_dense: str, n: int = 300, commit: str
                                               "--n", str(n), "--commit", commit])
 
 
+@app.function(image=image, cpu=4, memory=8192, timeout=1800, volumes={"/vol": vol})
+def review_kit_build():
+    """Stage E: blinded human-review kit on validation photos."""
+    return _run("54_review_kit.py", ["build"])
+
+
 @app.function(image=image, gpu="A100-80GB", timeout=7200, volumes={"/vol": vol})
 def gate3_eval(pairs: int = 182, checkpoint: str = "", tag: str = "gate3",
                precision: str = "bf16", replicate_first: int = 0,

@@ -271,13 +271,94 @@ def a15() -> str:
             "draws is NaN, see decision D29)\n\n" + md(df))
 
 
+def a16() -> str:
+    d = pd.read_csv(LOGS / "pooled_per_seed.csv")
+    d = d[d["subset"] == "full"]
+    pv = d.pivot(index="seed", columns="arm", values="macro_f1")[["A", "Astar", "B", "Cv2"]].reset_index()
+    summ = d.groupby("arm")["macro_f1"].agg(["mean", "std", "min", "max", "count"]).reset_index()
+    return ("### A16. Eight seeds per arm, test macro-F1 (full), every seed (42, 123, 2026 from the "
+            "original runs; 7, 11, 17, 23, 31 from Stage E)\n\n" + md(pv, 4)
+            + "\n\nSummary (SD with ddof=1):\n\n" + md(summ, 4))
+
+
+def a17() -> str:
+    d = pd.read_csv(LOGS / "pooled_seed_analysis.csv")
+    c = ["endpoint", "subset", "family", "comparison", "arm_a_mean", "arm_b_mean", "difference",
+         "ci_low", "ci_high", "ci_low_seeds_fixed", "ci_high_seeds_fixed", "p_raw", "p_holm",
+         "se_diff", "mdd_80pct", "established"]
+    return ("### A17. Pooled comparisons, two-level bootstrap (lesion groups and seeds), 10,000 "
+            "replicates, Holm per endpoint, subset and family. `ci_*_seeds_fixed` is the earlier "
+            "style of interval. Log-loss: lower is better\n\n" + md(d[c], 4))
+
+
+def a18() -> str:
+    d = pd.read_csv(LOGS / "headline_metrics_pooled.csv")
+    c = ["arm", "seeds", "accuracy_mean", "accuracy_vs_range", "macro_f1_mean", "macro_f1_vs_range",
+         "balanced_accuracy_mean", "balanced_accuracy_vs_range", "auc_macro_mean", "auc_macro_vs_range",
+         "melanoma_recall_mean", "melanoma_recall_sd", "melanoma_recall_vs_range", "macro_f1_sd"]
+    return ("### A18. Headline metrics pooled over all seeds against the reviewer's rough ranges "
+            "(accuracy 0.82 to 0.90, macro-F1 0.65 to 0.80, balanced accuracy 0.65 to 0.80, AUC 0.94 to "
+            "0.98, melanoma recall 0.55 to 0.80; seed SD up to 0.02). Not requirements\n\n" + md(d[c], 4))
+
+
+def a19() -> str:
+    j = json.loads((LOGS / "stageE_composite_arms.json").read_text())
+    rows = []
+    for arm, v in j["arms"].items():
+        rows.append({"arm": arm, **{k: x["mean"] for k, x in v.items()}})
+    pr = [{"metric": k, "mean": x["mean"], "ci_low": x["ci_low"], "ci_high": x["ci_high"]}
+          for k, x in j["paired_Cv2_minus_B"].items()]
+    return (f"### A19. DullRazor and Cv2 on {j['items']} validation composites with known clean "
+            "targets (pasted real strands, 128 px). `lesion_*` and `skin_*` use only pixels the hair "
+            "did not cover\n\n" + md(pd.DataFrame(rows), 3)
+            + "\n\nPaired Cv2 minus B, bootstrap CI over items:\n\n" + md(pd.DataFrame(pr), 3))
+
+
+def a20() -> str:
+    j = json.loads((LOGS / "stageE_condition_usage.json").read_text())
+    rows = []
+    for name, m in j["models"].items():
+        for r in m["rows"]:
+            rows.append({"model": name, "t": r["t"], "kept_hair": r["kept_hair"],
+                         "kept_other": r["kept_other"], "zeroed_over_kept_hair": r["zeroed_over_kept_hair"],
+                         "zeroed_over_kept_other": r["zeroed_over_kept_other"],
+                         "shuffled_over_kept_hair": r["shuffled_over_kept_hair"],
+                         "shuffled_over_kept_other": r["shuffled_over_kept_other"]})
+    return (f"### A20. Condition usage: epsilon-prediction error with the hairy input kept, and the ratio "
+            f"when it is zeroed or shuffled ({j['pairs']} validation pairs)\n\n" + md(pd.DataFrame(rows), 4))
+
+
+def a21() -> str:
+    j = json.loads((LOGS / "stageE_residual_hair_and_lesion_change.json").read_text())
+    v3 = []
+    for arm in ("Cv2", "B"):
+        for g, x in j["v3"][arm].items():
+            if isinstance(x, dict) and "median_remaining" in x:
+                v3.append({"arm": arm, "group": g, "n": x["n"], "median_remaining": x["median_remaining"]})
+    ex = []
+    for arm in ("Cv2", "B"):
+        for k in ("harvested_minus_val", "posthoc_train_harvested_minus_val_harvested"):
+            x = j["v3"][arm][k]
+            ex.append({"arm": arm, "comparison": k, "median_diff": x["median_diff"],
+                       "ci_low": x["ci_low"], "ci_high": x["ci_high"]})
+    v2 = j["v2"]
+    return ("### A21. Residual hair after the arm by photo group (median share of detector coverage left, "
+            "128 px) and lesion change on real validation photos\n\n" + md(pd.DataFrame(v3), 3)
+            + "\n\nGroup differences (the first is the pre-registered rule, which fired for both arms and is "
+            "confounded; the second is post hoc and matched):\n\n" + md(pd.DataFrame(ex), 3)
+            + f"\n\nLesion pixels changed by more than 10 gray levels on {v2['n']} real validation photos "
+            f"({v2['gate_photos']} gate, {v2['dense_photos']} dense): B {v2['B']['mean_lesion_changed']:.3f}, "
+            f"Cv2 {v2['Cv2']['mean_lesion_changed']:.3f}; paired Cv2 minus B "
+            f"{v2['paired_Cv2_minus_B_changed']['mean']:+.3f} (SD {v2['paired_Cv2_minus_B_changed']['sd']:.3f}).")
+
+
 def main() -> int:
     tpl = (REPORTS / "second_opinion_brief.template.md").read_text()
     head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
                           text=True, cwd=ROOT).stdout.strip()
     date = subprocess.run(["date", "-u", "+%Y-%m-%d"], capture_output=True, text=True).stdout.strip()
     appendix = "\n\n".join(f() for f in (a1_a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
-                                         a14, a15))
+                                         a14, a15, a16, a17, a18, a19, a20, a21))
     out = tpl.replace("<!-- APPENDIX -->", appendix).replace("{{HEAD}}", head).replace(
         "{{DATE}}", date)
     assert "{{" not in out and "<!-- APPENDIX -->" not in out

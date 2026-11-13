@@ -17,6 +17,38 @@ If you have repo access, start with `reports/decision_log.md` (D1 to D36), `repo
 
 ---
 
+## 0a. Update after the independent review (Stage E): read this before sections 1 to 13
+
+Sections 1 to 13 below were written before the review. **Where they conflict with this update, this update wins.** Plan: `reports/prereg_v4_review_response.md` (committed before running); results: `reports/stageE_results.md`; decision D38. Tables A16 to A21 in the appendix are generated from the new files.
+
+**Pooled over eight seeds** (A, A\*, B, Cv2 at seeds 42, 123, 2026, 7, 11, 17, 23, 31; two-level bootstrap over lesion groups and seeds; A16, A17): macro-F1 A 0.741 (SD 0.024), A\* 0.728 (0.020), Cv2 0.722 (0.012), B 0.693 (0.017). Only A over B is established (+0.048, CI +0.012 to +0.085, Holm p 0.008). A over Cv2 +0.019 (CI -0.013 to +0.054), B over Cv2 -0.029 (CI -0.059 to +0.002), Cv2 over A\* -0.006 (CI -0.034 to +0.021). All Cv2 rows are labelled exploratory. Per-image log-loss: nothing established. **Minimum detectable difference is 0.04 to 0.05**, set by the test sample (about 1,400 lesion groups), so more seeds cannot reach 0.02. The earlier three-seed SDs were misleading (A 0.005 against 0.024; Cv2 0.021 against 0.012), and with seeds held fixed the B-versus-Cv2 interval wrongly excluded zero.
+
+**What the reviewer's points turned into**
+| Reviewer point | What I did | Outcome |
+|---|---|---|
+| Cv2 labelled planned | Relabelled exploratory; A-B stays planned | Done in `09_stats.py --c-arm` output |
+| dz can contradict the difference | Withdrawn for macro-F1; added per-image log-loss with a valid dz | A3 dz values for macro-F1 are not interpretable |
+| Seed variance missing from CIs | Two-level bootstrap, eight seeds | See above |
+| Grad-CAM cannot support between-arm claims | Reported per seed; no between-arm claim | Every arm is also below the 0.644 centred-Gaussian baseline for both methods (A5) |
+| DullRazor not scored on ground-truth composites | Scored it (A19) | **DullRazor beats Cv2 on every measure**: 40.3 against 33.9 dB, strand removal 0.905 against 0.787, lesion pixels changed where hair was absent 5.9% against 18.3% (composites are the cleanest photos, so this says little about real photos with ink or dense hair; on 52 real photos B changed 25.1% of lesion pixels, Cv2 10.9%, hair crossing the lesion included) |
+| Train/test asymmetry | Residual hair by group (A21) | Pre-registered rule fired but is confounded (untrained B shows it); post-hoc matched comparison: train photos keep slightly more hair, so no sign of it |
+| Condition usage unchecked | Kept, zeroed, shuffled at four noise levels (A20) | All models use the condition up to t=1000; at t=1500 the released model still does (zeroing multiplies error 2.6 to 4.2 times) and mine barely do (1.1 to 1.45) |
+| Human review | Blinded 50-photo kit built (`artifacts/review_kit/`) | **Needs a person to rate it**; real-photo removal remains unvalidated |
+| 12 seeds for a 0.02 difference | Ran 5 extra seeds, reported the real floor | Underpowered for 0.02 by design of the test set |
+
+**Items I had marked NOT VERIFIED that are now settled**
+- Upstream EMA: the config's `ema_scheduler` block is commented "not used now", no vendored Python mentions EMA, and the paper does not mention it. EMA is not a deviation and not a promising lever (so option 6 below is withdrawn).
+- Hair-absent set equals the synthetic-pair source set: verified exactly (1,022 images; 654/182/186).
+- Paper PSNR/SSIM: 41.04 dB and 0.9656 for DM-AHR(SS) on the authors' 700-image synthetic-hair test set; DM-AHR without self-supervision 39.13 / 0.9575; SwinIR 39.76 / 0.9588; SRGAN 31.91 / 0.8803; SDM 34.38 / 0.8779. Different pairs, no hairy-input floor. I had wrongly said I could not confirm it.
+- **New deviation found:** upstream applies no gradient clipping; my trainer clips at 1.0 (engaged on 5 of 8 draws in the 20k diagnostic). The paper does not mention it. Not retrained; listed as a possible contributor to the high-noise weakness.
+- Still NOT VERIFIED: Modal prices; how the authors produced their 25-step images.
+
+**Options now (supersedes section 11).** The owner and a second reviewer both rejected the hybrid; the 256 px retrain and the EMA run are not recommended. What remains: (a) have a person rate the review kit; (b) deliver the null result as the finding; (c) only if a 0.02 difference matters, a larger test set, which this cohort cannot supply. Question 3 (condition usage), question 4 (EMA) and question 8 (asymmetry) in section 10 are answered above; the others stand.
+
+**Reference ranges (reviewer's estimates, not requirements; A18).** Eight-seed means for A, A\*, B and Cv2 are inside every range (accuracy 0.84 to 0.86, macro-F1 0.69 to 0.74, balanced accuracy 0.69 to 0.73, AUC 0.965 to 0.970, melanoma recall 0.57 to 0.59); seed SD of macro-F1 is just above 0.02 for A and A\*. The retired first diffusion run (C) is below every range and stays a documented failure. Melanoma recall has seed SD 0.05 to 0.13, so it cannot rank arms.
+
+---
+
 ## 1. State of the project in one page
 
 **Question.** Does diffusion-based hair removal (DM-AHR) change 7-class skin-lesion classification (ViT-B/16, HAM10000, 10,015 images) or explanation localization compared with original images and a classical DullRazor-style baseline?

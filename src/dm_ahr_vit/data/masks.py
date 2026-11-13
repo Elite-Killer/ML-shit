@@ -33,6 +33,28 @@ def load_mask_224(path, size: int = 224) -> np.ndarray:
     return (np.array(m) > 127).astype(np.uint8)
 
 
+def load_mask_registered(path, image_size_wh=None, size: int = 224) -> np.ndarray:
+    """Lesion mask in the same geometry as the model input, as a binary {0,1} array.
+
+    `load_mask_224` squashes the whole mask to size x size. The model, however, sees the image
+    after "resize the shorter side to int(size * 1.14), then centre-crop" (see
+    `data.dataset.build_transforms`), applied to the image as stored for the arm: 600 x 450 for
+    the original and DullRazor arms (pass ``image_size_wh=None``: masks are stored at that size),
+    128 x 128 (an aspect-ratio squash) for the diffusion and A* arms. Saliency maps live in that cropped frame, so the mask must be carried through the
+    same steps: resize to the stored image's size (NEAREST), then the same resize and crop.
+    """
+    from torchvision import transforms
+    from torchvision.transforms import InterpolationMode
+
+    with Image.open(resolve(path)) as fh:
+        m = fh.convert("L")
+        if image_size_wh is not None:
+            m = m.resize(tuple(int(v) for v in image_size_wh), Image.Resampling.NEAREST)
+    m = transforms.Resize(int(size * 1.14), interpolation=InterpolationMode.NEAREST)(m)
+    m = transforms.CenterCrop(size)(m)
+    return (np.array(m) > 127).astype(np.uint8)
+
+
 def build_x1_manifest(masks_dir: Path, split_df: pd.DataFrame, man: pd.DataFrame,
                       out_path: Path) -> pd.DataFrame:
     """One row per split image: mask presence, geometry checks, foreground fraction."""

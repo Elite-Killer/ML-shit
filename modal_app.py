@@ -471,6 +471,22 @@ def trainer_gates(gate: str = "1"):
     return _run("29_trainer_gates.py", ["--gate", gate])
 
 
+@app.function(image=image, cpu=8, memory=16384, timeout=7200, volumes={"/vol": vol})
+def harvest_hair(workers: int = 8, limit: int = 0):
+    return _run("40_harvest_hair.py", ["--workers", str(workers)]
+                + (["--limit", str(limit)] if limit else []))
+
+
+@app.function(image=image, gpu="A100-80GB", timeout=86400, volumes={"/vol": vol})
+def dmahr_train_v2(iterations: int = 20000, out_name: str = "dmahr_v2", workers: int = 8,
+                   warm_start: str = "/vol/artifacts/checkpoints/dmahr/gen_iter050000.pth"):
+    """Fine-tune on real-hair composites. Never writes into dmahr/ or dmahr_fixed20k/."""
+    assert out_name not in ("dmahr", "dmahr_fixed20k"), "refusing to overwrite a recorded run"
+    return _run("04_dmahr_train.py", ["--composite", "--warm-start", warm_start,
+                                      "--out-name", out_name, "--iterations", str(iterations),
+                                      "--num-workers", str(workers)])
+
+
 @app.function(image=image, gpu="A100-80GB", timeout=3600, volumes={"/vol": vol})
 def real_hair_diffusion(ckpt: str, name: str, ids: str, t0s: str = "600,1000,1500",
                         steps: int = 50):

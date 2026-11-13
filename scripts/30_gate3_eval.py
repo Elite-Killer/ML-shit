@@ -43,6 +43,8 @@ def main() -> int:
     ap.add_argument("--pairs", type=int, default=182)
     ap.add_argument("--checkpoint", default=None)
     ap.add_argument("--tag", default="gate3")
+    ap.add_argument("--precision", choices=["bf16", "fp32"], default="bf16",
+                    help="sampler autocast; bf16 was the original default")
     args = ap.parse_args()
 
     cfg = load_config("configs/dmahr.json")
@@ -66,7 +68,8 @@ def main() -> int:
             conds.append(fh.convert("RGB"))
 
     out: dict = {"checkpoint": str(ckpt), "pairs": int(len(val)),
-                 "sample_steps": SAMPLE_STEPS, "pass_margin_db": PASS_MARGIN}
+                 "sample_steps": SAMPLE_STEPS, "pass_margin_db": PASS_MARGIN,
+                 "precision": args.precision}
 
     net = load_model(cfg, ckpt, device=device)
 
@@ -75,7 +78,8 @@ def main() -> int:
     for start in range(0, len(val), 8):
         sl = slice(start, start + 8)
         outs, _ = clean_batch(net, conds[sl], cfg, device=device, seed=42,
-                              num_timesteps=SAMPLE_STEPS, use_bf16=True)
+                              num_timesteps=SAMPLE_STEPS,
+                              use_bf16=(args.precision == "bf16"))
         for o, ref, h in zip(outs, refs[sl], conds[sl]):
             a = np.asarray(o.resize(ref.size, Image.Resampling.BICUBIC),
                            dtype=np.float64) / 255.0

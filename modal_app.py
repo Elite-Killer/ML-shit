@@ -471,6 +471,14 @@ def trainer_gates(gate: str = "1"):
     return _run("29_trainer_gates.py", ["--gate", gate])
 
 
+@app.function(image=image, gpu="A100-80GB", timeout=3600, volumes={"/vol": vol})
+def real_hair_diffusion(ckpt: str, name: str, ids: str, t0s: str = "600,1000,1500",
+                        steps: int = 50):
+    return _run("39_real_hair_diffusion.py",
+                ["--ckpt", ckpt, "--name", name, "--ids", ids, "--t0s", t0s,
+                 "--steps", str(steps)])
+
+
 @app.function(image=image, gpu="A100-80GB", timeout=7200, volumes={"/vol": vol})
 def partial_noise_eval(ckpt: str, name: str, tag: str, t0s: str = "600,1000,1500,1999",
                        steps: int = 50, seeds: int = 4, pairs: int = 24,

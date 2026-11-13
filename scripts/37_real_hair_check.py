@@ -63,12 +63,15 @@ def _load(path: Path, to128: bool = True) -> np.ndarray:
 def cmd_measure(args) -> None:
     cfg = json.loads(Path(args.config).read_text())["screen"]
     ids = [i for i in Path(args.ids).read_text().split() if i]
+    if args.arm:
+        arm_dirs = {k: Path(v) for k, v in (a.split("=", 1) for a in args.arm)}
+    else:
+        arm_dirs = {"B": Path(args.b_dir), "Creleased": Path(args.c_dir)}
     rows = []
     sheet = []
     for iid in ids:
         o = _load(Path(args.orig_dir) / f"{iid}.jpg")
-        outs = {"B": _load(Path(args.b_dir) / f"{iid}.png"),
-                "Creleased": _load(Path(args.c_dir) / f"{iid}.png")}
+        outs = {name: _load(d / f"{iid}.png") for name, d in arm_dirs.items()}
         mask, st0 = detect_hair(o, cfg)
         m = mask.astype(bool)
         row = {"image_id": iid, "cov_orig": st0["coverage"]}
@@ -81,10 +84,10 @@ def cmd_measure(args) -> None:
             row[f"absdiff_out_{name}"] = float(diff[~m].mean())
         rows.append(row)
         if len(sheet) < 8:
-            sheet.append(np.concatenate([o, outs["B"], outs["Creleased"]], axis=1))
+            sheet.append(np.concatenate([o, *outs.values()], axis=1))
     df = pd.DataFrame(rows)
     summ = {}
-    for name in ("B", "Creleased"):
+    for name in arm_dirs:
         summ[name] = {
             "median_fraction_of_hair_coverage_remaining": float(df[f"remaining_{name}"].median()),
             "mean_fraction_remaining": float(df[f"remaining_{name}"].mean()),
@@ -94,8 +97,8 @@ def cmd_measure(args) -> None:
             "inside_over_outside_ratio": float(df[f"absdiff_in_{name}"].mean() / df[f"absdiff_out_{name}"].mean()),
         }
     OUT.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(np.concatenate(sheet, axis=0)).save(OUT / "real_hair_contact_sheet.png")
-    df.to_csv(OUT / "real_hair_check.csv", index=False)
+    Image.fromarray(np.concatenate(sheet, axis=0)).save(OUT / f"real_hair_contact_sheet{args.out_suffix}.png")
+    df.to_csv(OUT / f"real_hair_check{args.out_suffix}.csv", index=False)
     result = {
         "n_images": len(df), "median_orig_coverage": float(df["cov_orig"].median()),
         "summary": summ,
@@ -107,7 +110,7 @@ def cmd_measure(args) -> None:
             "resolution": SIZE,
         },
     }
-    (OUT / "real_hair_check.json").write_text(json.dumps(result, indent=1))
+    (OUT / f"real_hair_check{args.out_suffix}.json").write_text(json.dumps(result, indent=1))
     print(json.dumps(result, indent=1))
 
 
@@ -125,6 +128,9 @@ def main() -> int:
     m.add_argument("--orig-dir", default="/root/local/hair_check/orig")
     m.add_argument("--b-dir", default="/root/local/hair_check/B")
     m.add_argument("--c-dir", default="/root/local/hair_check/Creleased")
+    m.add_argument("--arm", action="append", default=None,
+                   help="NAME=DIR, repeatable; replaces the default B and Creleased arms")
+    m.add_argument("--out-suffix", default="")
     m.add_argument("--config", default=str(ROOT / "artifacts" / "logs" / "hair_frozen_config.json"))
     args = ap.parse_args()
     {"select": cmd_select, "measure": cmd_measure}[args.cmd](args)

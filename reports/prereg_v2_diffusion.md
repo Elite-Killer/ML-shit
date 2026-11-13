@@ -76,3 +76,26 @@ Artifacts: `artifacts/diagnosis/stageA_*_partial_noise.json` (checkpoint hashes 
 **The positive control missed its bar by 0.04 dB.** The pre-registered bar was a margin of at least +2.0 dB for the released model at t0=1999, and it scored +1.96. By my own rule that means the script is not yet validated. The independent evidence points the other way: an earlier, separate check (`artifacts/logs/respacing_check.json`, different code path, 25 pairs) gave the released model 23.23 dB at 25 steps and 24.23 dB at 50 steps, and this run gives 23.26 dB. A 0.04 dB miss on a 24-pair mean is inside what a different pair set changes. I am treating the first run as indicative only.
 
 **Replication, rules fixed before running it.** Same script on 48 validation pairs the first run never saw (pairs 24 to 71, `--offset 24`), for the fixed model at all four t0 and the released model at t0 in 1000 and 1999. The bar is unchanged: released at t0=1999 needs a margin of at least +2.0 dB. If it misses again, Stage A is recorded as not validated by the strict bar. The fixed-model sampler counts as passing only if the pass criteria above hold on both pair sets.
+
+## Stage A, replication on 48 unseen validation pairs (commit eb39c08, pairs 24 to 71, floor 21.36 dB)
+
+| Model | t0 | PSNR | margin | runs below floor | sd of seed means |
+|---|---:|---:|---:|---:|---:|
+| fixed, 50k | 600 | 30.39 | +9.03 | 0% | 0.10 |
+| fixed, 50k | 1000 | 30.61 | +9.26 | 0% | 0.25 |
+| fixed, 50k | 1500 | 26.19 | +4.83 | 14% | 0.24 |
+| fixed, 50k | 1999 (pure noise) | 16.24 | -5.12 | 93% | 0.24 |
+| released (control) | 1000 | 25.73 | +4.37 | 0% | 0.07 |
+| released (control) | 1999 (pure noise) | 23.14 | **+1.78** | 31% | 0.70 |
+
+### Stage A verdict
+
+- **Sampler: pass at t0 of 600 and 1000, on both pair sets.** Margin about +9 dB, no run below the hairy-input floor, spread across noise seeds 0.10 to 0.29 dB. t0=1500 fails (13% and 14% of runs below floor, over the 10% limit) and a pure-noise start fails (-5 dB, over 90% below floor), as predicted. The prediction that t0=1000 passes held.
+- **Positive control: missed its bar twice** (+1.96 and +1.78 against +2.0). By the rule written before the replication, Stage A is recorded as **not validated by the strict bar**, and I am not changing the bar. What supports the script anyway, not a substitute for passing: it reproduces the earlier independent respacing measurement (23.2 dB here; 23.23 dB at 25 steps and 24.23 dB at 50 steps in `artifacts/logs/respacing_check.json` on a different pair set), it uses the same scoring code as the Gate-3 evaluation whose control passed earlier (released model 26.64 dB), and the released model at t0=1000 behaves consistently (+4.4, 0% below floor, both sets). The +2.0 bar was set from a different pair set's floor and was probably too tight for this one.
+- **What this does not show.** Everything here is our own simple synthetic hair. It says nothing about real hair, which is Stage B.
+
+## Stage B0, before running: does the Stage A sampler already remove real hair?
+
+Run `fixed 50k` with the Stage A sampler (DDIM, 50 steps, t0 in 600, 1000, 1500) on the 40 train-split real-hair images of `reports/hair_check_prereg.md`, and score with `scripts/37_real_hair_check.py measure --arm ...` (inside/outside change ratio, same detector mask; DullRazor scored 21.7 and the released model 1.13 on this measure).
+
+Prediction: no. The model was trained on simple curved hair, as the released one was on its own synthetic hair, so I expect a ratio below 2 at every t0 and hair still visible. If a ratio of 2 or more appears at some t0 with lesions intact on visual review, real-hair removal already works and Stage B becomes polishing. Either way this is the baseline Stage B has to beat.

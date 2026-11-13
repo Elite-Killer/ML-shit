@@ -100,7 +100,17 @@ def main() -> int:
 
     results, per_pair = {}, []
     floor = metrics_for(floor_in, gts, gts256, lp_net, Metrics, device)
-    results["hairy_input_floor"] = {k: float(floor[k].mean()) for k in floor.columns}
+    # 3 of the 707 pairs have identical hairy and hairless images (PSNR undefined): excluded from every
+    # mean below, for the floor and for each setting alike, and counted.
+    ok = np.isfinite(floor["psnr_up"]).to_numpy()
+    results["n_pairs_excluded_identical"] = int((~ok).sum())
+    results["hairy_input_floor"] = {k: float(floor[k][ok].mean()) for k in floor.columns}
+    results["hairy_input_floor"]["psnr_up_median"] = float(floor["psnr_up"][ok].median())
+    fl = floor.copy()
+    fl.insert(0, "setting", "hairy_input_floor")
+    fl.insert(1, "cls", [p["cls"] for p in pairs])
+    fl.insert(2, "name", [p["name"] for p in pairs])
+    per_pair.append(fl)
 
     settings = [("respaced", 10, True), ("respaced", 25, True), ("respaced", 50, True),
                 ("full", 2000, True), ("truncated", 10, True)]
@@ -117,6 +127,8 @@ def main() -> int:
                 outs += [np.asarray(x.convert("RGB")) for x in o]
             df = metrics_for(outs, gts, gts256, lp_net, Metrics, device)
             key = f"{mode}_{steps}{'_bf16' if bf16 else ''}"
+            full_df = df
+            df = df[ok]
             results[key] = {k: float(df[k].mean()) for k in df.columns}
             results[key].update({f"{k}_sd": float(df[k].std()) for k in df.columns})
             results[key]["n"] = len(df)
@@ -124,7 +136,7 @@ def main() -> int:
             results[key]["within_2db_of_paper"] = bool(abs(results[key]["psnr_up"] - PAPER["psnr"]) <= 2.0)
             results[key]["verdict"] = ("reproduced" if results[key]["above_floor_psnr"]
                                        and results[key]["within_2db_of_paper"] else "not reproduced")
-            d = df.copy()
+            d = full_df.copy()
             d.insert(0, "setting", key)
             d.insert(1, "cls", [p["cls"] for p in pairs])
             d.insert(2, "name", [p["name"] for p in pairs])
@@ -139,7 +151,7 @@ def main() -> int:
                                   use_bf16=False, respaced=False)
             df = metrics_for([np.asarray(x.convert("RGB")) for x in o], gts[:n], gts256[:n], lp_net,
                              Metrics, device)
-            sub = per_pair[3][per_pair[3]["setting"] == "full_2000_bf16"].head(n)
+            sub = per_pair[4][per_pair[4]["setting"] == "full_2000_bf16"].head(n)
             results["fp32_check_full_2000"] = {
                 "n": n, "psnr_up_fp32": float(df["psnr_up"].mean()),
                 "psnr_up_bf16_same_pairs": float(sub["psnr_up"].mean())}

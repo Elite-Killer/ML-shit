@@ -63,12 +63,15 @@ def _load(path: Path, to128: bool = True) -> np.ndarray:
 def cmd_measure(args) -> None:
     cfg = json.loads(Path(args.config).read_text())["screen"]
     ids = [i for i in Path(args.ids).read_text().split() if i]
+    if args.arm:
+        arm_dirs = {k: Path(v) for k, v in (a.split("=", 1) for a in args.arm)}
+    else:
+        arm_dirs = {"B": Path(args.b_dir), "Creleased": Path(args.c_dir)}
     rows = []
     sheet = []
     for iid in ids:
         o = _load(Path(args.orig_dir) / f"{iid}.jpg")
-        outs = {"B": _load(Path(args.b_dir) / f"{iid}.png"),
-                "Creleased": _load(Path(args.c_dir) / f"{iid}.png")}
+        outs = {name: _load(d / f"{iid}.png") for name, d in arm_dirs.items()}
         mask, st0 = detect_hair(o, cfg)
         m = mask.astype(bool)
         row = {"image_id": iid, "cov_orig": st0["coverage"]}
@@ -81,10 +84,10 @@ def cmd_measure(args) -> None:
             row[f"absdiff_out_{name}"] = float(diff[~m].mean())
         rows.append(row)
         if len(sheet) < 8:
-            sheet.append(np.concatenate([o, outs["B"], outs["Creleased"]], axis=1))
+            sheet.append(np.concatenate([o, *outs.values()], axis=1))
     df = pd.DataFrame(rows)
     summ = {}
-    for name in ("B", "Creleased"):
+    for name in arm_dirs:
         summ[name] = {
             "median_fraction_of_hair_coverage_remaining": float(df[f"remaining_{name}"].median()),
             "mean_fraction_remaining": float(df[f"remaining_{name}"].mean()),

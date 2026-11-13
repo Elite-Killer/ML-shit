@@ -229,8 +229,10 @@ Trains DM-AHR on **train-split sources only**, selecting on validation.
 images into Arm C through an unknown training set. The released weights are used for the smoke test
 only, never for Arm C.
 
-*Deviation:* 20,000 iterations against 660,000 in the upstream config. Documented as D1; it is the
-single most important caveat on Arm C.
+*Deviation:* 20,000 iterations against 660,000 in the upstream config, and a training script that
+gave the network an inverted noise-level signal (found after the primary results; see
+`reports/oneshot_diagnostic_report.md`). Together they are the single most important caveat on
+Arm C.
 
 *Writes:* `artifacts/checkpoints/dmahr/`, `dmahr_train.json`, `training_manifest.json`.
 
@@ -281,13 +283,11 @@ hairy input* scored as a floor.
 
 *Why the floor matters:* a method that scores below the image it was given has actively damaged it.
 Arm C scored below the hairy input, which is how the failure was first detected. A follow-up
-diagnosis (`scripts/17_arm_c_diagnose.py`, written up in `reports/arm_c_diagnosis.md`) then
-separated the two possible causes: a hairless reference round-trips through the same inference path
-at PSNR 34.6 / SSIM 0.990, and the released DM-AHR checkpoint reaches PSNR 26.8 / SSIM 0.684
-through it, while the checkpoint trained here reaches 15.0 / 0.079. The adapter is sound; the
-checkpoint is undertrained. Its output is not blurred — it carries far more high-frequency energy
-than the reference with reduced global contrast, which is what a model that has not learned the
-mapping produces.
+diagnosis (`scripts/17_arm_c_diagnose.py`, written up in `reports/arm_c_diagnosis.md`) first
+concluded the checkpoint was undertrained. That conclusion is retracted: the training script fed the
+network an inverted noise-level signal, found later and documented in
+`reports/oneshot_diagnostic_report.md`. The released DM-AHR checkpoint reaches PSNR 26.8 / SSIM
+0.684 through the same inference path, while the checkpoint trained here reaches 15.0 / 0.079.
 
 ### Phase 11 — Explainability (`08_xai.py`)
 
@@ -536,7 +536,7 @@ Every one is recorded in `reports/decision_log.md` with its reason. Summary:
 
 | # | Deviation | Status |
 |---|---|---|
-| D1 | Diffusion trained 20,000 iterations, not 660,000 | Documented, limits Arm C |
+| D1 | Diffusion trained 20,000 iterations, not 660,000, with a defective script | Documented, limits Arm C |
 | D9 | DERMAHAIR pairs unavailable (Kaggle-gated); synthetic hair used | Documented, F04 PENDING |
 | D12 | Arm C sampled at 1,000 steps not 2,000 | Labelled ablation |
 | D14 | Implementation on Modal, not Google Colab as the proposal states | Documented |
@@ -570,11 +570,12 @@ which the source does not claim were dermatologist-traced.
 
 ## 12. Questions a supervisor is likely to ask
 **"Why is Arm C so much worse? Isn't that just a broken implementation?"**
-Partly a budget problem, and the report says so first: 20,000 training iterations instead of
-660,000, 1,000 sampling steps instead of 2,000, and 128 px upsampled to 224. The smoke test, the
-geometry check, the deterministic reload and the panelled outputs show the implementation runs
-correctly. What was not funded was the training budget. The report labels Arm C an ablation and does
-not present it as the method's published performance.
+Partly a budget problem, and partly a defect in our training script. The report says so first: the
+script gave the network an inverted noise-level signal (found after the primary results), the run
+used 20,000 training iterations instead of 660,000, 1,000 sampling steps instead of 2,000, and
+128 px upsampled to 224. The smoke test, the geometry check, the deterministic reload and the
+panelled outputs show the sampling implementation runs correctly. The report labels Arm C a failed
+replication and does not present it as the method's published performance.
 
 **"How do you know there is no leakage?"**
 Three independent guards: the split is grouped by lesion plus pixel-confirmed duplicates; the
@@ -604,7 +605,7 @@ measured per-unit costs.
 
 ## 13. What is deliberately not claimed
 - That diffusion hair removal helps or harms classification in general. The tested model was
-  under-resourced.
+  a failed replication.
 - That the explanations show clinically correct reasoning. They show spatial alignment with released
   masks.
 - That the hair detector is validated on real hair. No independent annotations exist.

@@ -430,3 +430,12 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
   committed, against the evidence rule. They were deleted; the one that carries
   the result was committed as `scripts/33_nan_grad_probe.py`.
 
+
+## D30 - Own diffusion retrain stopped; deliverables corrected and regenerated
+
+- Stopped: the continuation of the fixed trainer was stopped by the project owner at 56,300 of 100,000 iterations (about 3,590 s on one A100-80GB) because it was not showing a usable result. The pre-registered final evaluation was not run and no verdict is claimed for 100,000 iterations (`reports/prereg_continuation_arm_c.md`).
+- Measured before stopping (validation pairs, 12 pairs, one noise draw): eps L1 at t=1500 was 0.0098 (20k), 0.0098 (40k), 0.0086 (50k) against 0.0048 for the released model; averaging the 30k to 50k snapshots gave 0.0089. Sampling quality was not measured after 20,000 iterations. Gradient norms of our model exceed our clip of 1.0 on 62.5% of draws (n=8); the effect of clipping is unknown.
+- Decision: our own Arm C is reported as a failed replication (inverted noise-level signal in the original script; the fixed script did not reach usable sampling at the budgets tried). The retracted "undertrained, adapter sound" diagnosis is removed from the final report, the three Word reports and PDFs, the code guide, README and PROGRESS, and a SUPERSEDED banner is added to the older diagnosis, changelog, client response, review brief and second-opinion documents, which are kept unchanged below it.
+- Creleased is the only diffusion arm with usable hair removal. Its sampling routine is not reproducible from committed code (D26) and its training data (DERMAHAIR, per-class configs named after the HAM10000 diagnoses) was not available to us, so overlap with our test images cannot be ruled out. Both are now stated in the report limitations.
+- Verification: deliverable gates V1 to V8 pass on the Modal volume (V3 compares the tracked report against one regenerated from artifacts); acceptance report 14 pass, 0 fail; 44 tests pass, 2 skipped.
+- Not done, and priced: regenerating Arm C from the released weights at 2,000 steps from committed code is about 10.5 GPU-hours (roughly $26 at an unverified $2.5 per GPU-hour) plus about $1 to $2 for three ViT seeds. Training our own model to the upstream 660,000 iterations is roughly $32 to $46 with an uncertain outcome. Neither was started.

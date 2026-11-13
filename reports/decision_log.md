@@ -447,3 +447,10 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
 - Not yet changed: `final_research_report.md`, the Word reports and the client text still present A over B as a finding. They need the caveat above if the owner does not want Arm B rebuilt.
 - Disclosed: the pre-registered coverage control for this check failed (DullRazor left 63%, rule 30%), so the detector-coverage measure is void; the inside/outside ratio passed its control and carries the conclusion.
 - Literature: the DM-AHR paper states it trained on HAM10000 images other than a 700-image test set, so Creleased very probably saw our validation and test images (self-supervised, no labels).
+
+## D32 - Closing changes to the reports
+
+- Corrected: the Word headline said the released checkpoint "does remove hair"; after the real-hair check (D31) that is wrong for real hair. The headline, the final report, the three Word reports, the code guide and PROGRESS now say that neither hair-removal arm cleanly removed real hair, that the original-against-DullRazor gap is confounded by damaged Arm B images, and that the released model very probably saw our validation and test images (paper: trained on HAM10000 images other than a 700-image test set).
+- Added `reports/client_summary.md`, a plain-English one-page summary.
+- Added a compute addendum to `reports/compute_plan.md`; the run registry under-records today's jobs.
+- Not done: Arm B was not rebuilt (about $2 to $3, optional). No test pair was scored for any retrained model.

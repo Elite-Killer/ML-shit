@@ -107,10 +107,11 @@ def build() -> Path:
             f"{ARM_LABEL[worst['arm']]} ({worst['macro_f1_mean']:.3f}) was far behind, and the "
             f"authors' released checkpoint (Creleased, "
             f"{full[full['arm'] == 'Creleased']['macro_f1_mean'].iloc[0]:.3f}) closed most of that "
-            f"gap but still did not beat classical DullRazor or original images. The honest "
-            f"conclusion is 'hair removal did not help this classifier', not 'DM-AHR cannot "
-            f"remove hair' — the released checkpoint does remove hair, it just does not improve "
-            f"classification.")
+            f"gap but did not beat the original images, and its difference from classical "
+            f"DullRazor was inconclusive. The honest conclusion is that the question was not "
+            f"properly tested: on real hair the released checkpoint leaves the hair in place and "
+            f"our DullRazor arm damages lesions, so neither method cleanly removed hair. Original "
+            f"images scored best, but that cannot be read as proof that hair removal does not help.")
     doc.add_page_break()
 
     h1(doc, "1. What was trained and how")
@@ -225,6 +226,20 @@ def build() -> Path:
             "See reports/oneshot_diagnostic_report.md.",
             fill="FDF3ED", bar="C05A33")
 
+    callout(doc, "Does any arm remove real hair? Not cleanly",
+            "Every image-quality number above is measured on synthetic hair overlays. A separate "
+            "check on 40 hairy training images with real hair (test set not used; "
+            "artifacts/diagnosis/real_hair_check.json) found that the released DM-AHR model leaves "
+            "real hair in place: it changes hair pixels about as much as other pixels (ratio 1.13, "
+            "against 21.7 for DullRazor), and the strands are visibly intact in the contact sheet. "
+            "Our DullRazor arm does remove hair, but in all 8 images reviewed it replaced lesion and "
+            "skin texture with blocky patches, and in one it erased the whole lesion; the likely "
+            "cause is our frozen detector and inpainting settings. So neither arm cleanly removed "
+            "real hair, and the classification comparison does not test whether hair removal helps. "
+            "One control in that check failed (the hair-coverage measure, now void); the conclusion "
+            "rests on the change ratio, whose control passed. See reports/hair_check_prereg.md.",
+            fill="FDF3ED", bar="C05A33")
+
     h1(doc, "4. Explainability")
     body(doc,
          "For every test image, two saliency methods — Grad-CAM on the patch grid and attention "
@@ -323,6 +338,10 @@ def build() -> Path:
                 "not rescue it: A vs Creleased is +0.038 (95% CI +0.005 to +0.071, Holm p=0.048, "
                 "negligible effect) and B vs Creleased is inconclusive (-0.015, CI -0.049 to "
                 "+0.019, Holm p=0.400).")
+    bullet(doc, f"A vs B: {verdict(row(stats, 'test_macro_f1', 'A-B', 'full'))}. This must not be "
+                "read as evidence that hair removal hurts classification: the real-hair check shows "
+                "our frozen DullRazor settings damage lesions, so the gap is confounded with image "
+                "damage and was not separated from it.")
     body(doc, "H3 — explainability (attention focuses more on lesions after diffusion): ",
          space_after=2)
     bullet(doc, f"Grad-CAM overlap, A vs C: {verdict(gc)}. Attention roll-out, A vs C: "
@@ -346,10 +365,23 @@ def build() -> Path:
          "128 px to 224. The upstream config's n_iter is 660,000 and the released checkpoint is "
          "named I725000_E1083. The fixed script did not reach usable sampling at the budgets "
          "tried. Arm C's results describe that defective run, not the published method."),
+        ("Arm B damages lesions on real hair — ",
+         "On 8 real-hair training images reviewed, our frozen DullRazor settings replaced lesion "
+         "and skin texture with blocky inpainting patches, and in one image erased the lesion (a "
+         "dark lesion and marker ink were read as hair). The A-versus-B difference is therefore "
+         "confounded and is not evidence about hair removal in general. Re-tuning the arm on "
+         "training and validation images would address it; that was not done."),
+        ("The released diffusion model leaves real hair — ",
+         "It reproduces synthetic hair removal well, which is what it was trained on, but on 40 "
+         "real-hair training images it left the hair in place. Creleased is therefore close to "
+         "'the original at 128 px' and is not a test of hair removal."),
         ("Creleased is exploratory, not pre-registered — ",
          "It uses the authors' released checkpoint at a 25-step respaced schedule, a deviation "
-         "from the paper's 2,000 steps, and its classifier was trained on our budget rather than "
-         "the paper's. Its comparisons are reported in their own Holm family and must not be "
+         "from the paper's 2,000 steps, and the routine that produced those images is not "
+         "reproducible from committed code. Its classifier was trained on our budget rather than "
+         "the paper's. The paper states the model was trained on HAM10000 images other than a "
+         "700-image test set, so it very probably saw our validation and test images (no labels "
+         "were used). Its comparisons are reported in their own Holm family and must not be "
          "read as pre-registered results."),
         ("Three seeds — ",
          "inference is over ~1,437 lesion groups with seeds averaged inside each replicate, "

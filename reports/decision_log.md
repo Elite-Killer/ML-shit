@@ -460,3 +460,10 @@ Authority order applied: `AGENTS.md` > `docs/ACCEPTANCE_CRITERIA.md` > `docs/DEV
 - The first Modal harvest run failed on a missing config path; the fix reads `configs/hair_screen.json` (hash-checked, equal to the frozen config).
 - Reviewing the full harvest, small-area layers held most of the contamination (bubble rim, lesion dots, ink), so composites use only layers of at least 0.4% harvested area. The rule came from looking at 24 random and 12 densest layers, all from train or validation images. It is not validated and the review is agent-reviewed, not expert-reviewed.
 - `scripts/43_harvest_review.py` regenerates the review sheets. Test pairs and test images were not read.
+
+## D34 - Stage B gate failed; Stage C goes ahead as a recorded deviation
+
+- Fine-tune on real-hair composites (20,000 iterations from the 50k snapshot, `dmahr_v2/final_gen.pth`, sha256 prefix dd06c216) was scored on validation data only. Pre-registered gate: real-photo inside/outside ratio 1.95 (t0=600) and 1.57 (t0=1000) against 2.0, so **failed**. The follow-up composite rule (hair removal at least 0.5 and 0.2 above the 50k model) gave 0.77/0.81 against 0.64/0.66, so **not met** (gain +0.14, +0.15).
+- Agent-reviewed sheets of 12 dense-hair validation photos (selection rule fixed before viewing) show nearly all hair removed with lesions intact, and the detector shows all 12 under half the original coverage. The ratio instrument cannot grade a diffusion model because the model changes pixels everywhere.
+- Decision: run Stage C (process hair-present images with v2 at t0=600, DDIM 50 steps; three ViT seeds; test touched once per frozen checkpoint) while keeping the gate recorded as failed. Reports must not say hair removal was validated. Reason for deviating: the pre-registered instrument is shown to be unable to detect removal, the cost is a few dollars, and the classification outcome is reported either way. This is my decision on my own reading; the owner can reverse it by discarding the Cv2 results.
+- Old Arm C (defective trainer, pure-noise 2,000-step sampling) and Creleased remain in the record unchanged.

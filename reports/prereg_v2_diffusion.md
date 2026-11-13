@@ -165,3 +165,27 @@ Reading the result: the detector-based ratio is a crude instrument at 128 px, wh
 Because the real-photo ratio cannot tell removal from regeneration noise, add a measure with a known answer: real strands harvested from validation images are pasted onto other validation images (`scripts/45_composite_eval.py`, 48 items, compositing seed 100 that differs from the training seed, 2 noise seeds, DDIM 50 steps, t0 of 600 and 1000, 50k model against v2 final). Reported: PSNR against the clean target with the hairy input as floor and the 128 px resize of the clean target as ceiling; and hair removal at native 128 px, one minus the strand-weighted absolute error of the output over that of the hairy input (1.0 = strands gone, 0 = unchanged).
 
 Rule fixed now: v2 has learned to remove real strands if hair removal is at least 0.5 at t0=600 or t0=1000 **and** at least 0.2 higher than the 50k model at the same t0. If it does not, the fine-tune did not teach strand removal at this training length and setup, whatever the real-photo ratio says. This measure cannot prove removal on photographs; it can only show whether the model learned the task it was trained on.
+
+### Result of the additional measure (48 held-out composites, 2 noise seeds; `artifacts/logs/stageB_val_composite_eval.json`)
+
+| Model | t0 | PSNR | floor | ceiling | margin | share of gap closed | hair removal (native 128 px) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 50k (sha256 77031da6) | 600 | 31.53 | 25.24 | 42.32 | +6.29 | 0.39 | 0.635 |
+| 50k | 1000 | 31.34 | 25.24 | 42.32 | +6.10 | 0.36 | 0.662 |
+| v2 (sha256 dd06c216) | 600 | 32.78 | 25.24 | 42.32 | +7.54 | 0.48 | 0.773 |
+| v2 | 1000 | 31.94 | 25.24 | 42.32 | +6.70 | 0.39 | 0.806 |
+
+**By the rule written above: not met.** v2 clears the 0.5 level (0.77 and 0.81), but it is only 0.14 and 0.15 above the 50k model, short of the required 0.20. The 50k model, which never trained on real strands, already removes 63 to 66% of pasted real-strand error; the fine-tune adds about 14 points. So the plan's premise that the earlier model could not handle real strands was too pessimistic, and the gain from this fine-tune is moderate.
+
+### Exploratory look at dense real hair (selection rule fixed before any output was viewed)
+
+The 40-image gate set is mostly faint hair (it was picked by detector coverage at 128 px, which also fires on lesion texture), so the ratio on it says little. Separately, the 12 validation images with the largest harvested strand area (`scripts/46_dense_hair_sheet.py select`, strand area 9.1% to 14.8% of the image) were run through the 50k and v2 models. Agent-reviewed sheets: `artifacts/diagnosis/dense_hair_sheet_stageB_val_a.png` and `_b.png` (columns: original, DullRazor, 50k t0=600, v2 t0=600, v2 t0=1000).
+
+- What I saw: v2 removes nearly all visible hair in all 12 images with lesion outline and colour kept. The 50k model leaves the hair faded but visible. DullRazor removes hair but replaces lesions and skin with polygon patches. v2 leaves a few dark smudges (row 1 of sheet a, where hair is long, parallel and dense; small marks in sheet b) and the lesions lose fine texture, because the model works at 128 px. Not checked: whether the soft lesion texture matters to a classifier; Stage C measures that.
+- Detector numbers on the same 12 (`real_hair_check_stageB_dense_val.json`; median share of detector coverage remaining, with the count of images under half remaining): DullRazor 0.09 (12), v2 t0=600 0.17 (12), v2 t0=1000 0.13 (12), 50k 0.27 (11), released 0.97 (0). The inside/outside ratio stays near 1.7 to 1.9 for every diffusion model because they change pixels everywhere (mean change outside the hair mask 5.7 against 0.24 for DullRazor), which is why that ratio cannot be used to grade a diffusion model.
+
+### Stage B verdict and the decision to continue (D34)
+
+- **The pre-registered gate is not met** (ratio 1.95 and 1.57 against 2.0; composite rule 0.14 and 0.15 against 0.20). It stays recorded as failed.
+- **Stage C is run anyway, as a recorded deviation from "only if Stage B passes".** Reasons: the gate's instrument is shown to under-measure diffusion removal (ground-truth composites, dense-hair detector numbers and sheets agree that hair is removed); the cost is a few dollars; and Stage C's classification result is reported whatever it shows. What this does **not** license: no report may say hair removal was validated. It may say: strict gate failed; supporting evidence is a 12-image agent-reviewed look and a composite ground-truth test; removal on photographs has not been confirmed by any pre-registered test.
+- Start level for Stage C: **t0=600**, chosen before any test data was touched because it scored higher than t0=1000 on three of the four validation measures (real-photo ratio 1.95 against 1.57, synthetic margin +7.83 against +7.17, composite margin +7.54 against +6.70); hair removal was lower, 0.77 against 0.81.

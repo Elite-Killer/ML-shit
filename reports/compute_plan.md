@@ -99,3 +99,8 @@ CPU-only diagnostics ran on the development sandbox and are not billed to Modal.
 ## Addendum: Stages B and C (rebuilt diffusion arm)
 
 Measured on one A100-80GB unless noted: strand harvest 125 s on CPU; fine-tune 682 s (20,000 iterations, one preemption resumed from the 9,000 snapshot); validation evaluations about 5 min in total; Cv2 sampling in four containers of 356 to 601 s plus 67 s for the 186 test pairs; three ViT trainings of 452 to 553 s each plus 47 to 165 s of evaluation and explanation. About 1.3 GPU-hours in total. Modal prices were not verified; at an assumed $2.5 to $3.5 per hour that is roughly $3 to $5. No spend cap was set by the owner (the provisional `max_spend_usd` is in `configs/protocol.json`).
+
+
+## Addendum: Stage E (extra seeds and checks)
+
+Measured: 20 ViT runs (train and evaluate) took 10,835 s of container time in total (3.0 GPU-hours, 40 jobs, no preemption); composite arms 76 s, condition usage 38 s, residual hair 69 s and 125 s (CPU). About 3.1 GPU-hours. Modal prices were not verified; at an assumed $2.5 to $3.5 per hour that is roughly $8 to $11.

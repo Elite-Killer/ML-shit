@@ -63,3 +63,12 @@ Metrics already known to fall outside these ranges, so nobody is surprised: arm 
 ## 8. Cost
 
 20 ViT runs of about 9 minutes training plus about 1 minute evaluation on A100-80GB, about 3.3 GPU-hours; checks V1 to V4 well under 0.3 GPU-hours; analysis on CPU. Estimated $8 to $12 at an assumed $2.5 to $3.5 per hour; Modal prices not verified.
+
+## 9. Addendum after the results (dated 2026-11-13; results are in `reports/stageE_results.md`)
+
+- Everything in sections 1 to 6 was run as written. Measured cost: 3.0 GPU-hours for the 20 runs (no preemption), about 0.1 for the checks.
+- **V3 rule fired and is confounded.** Harvested train photos against all validation photos gave an asymmetry verdict of "yes" for Cv2 (median remaining coverage 0.489 against 0.957), and also for DullRazor (0.331 against 0.731), which never trained on anything: the harvest criterion selects photos that are easy to clean. The verdict as pre-registered is recorded. **Post hoc**, a matched comparison against validation photos meeting the same harvest criterion (n=204) was added: harvested train photos keep slightly more hair than harvested validation photos (Cv2 +0.081, B +0.062), so no sign of the feared asymmetry. The post-hoc group was chosen after seeing that B showed the same gap.
+- **The "underpowered for 0.02" flag applies to every macro-F1 comparison:** minimum detectable difference 0.039 to 0.052 with eight seeds. The cause is the test-set sample (about 1,400 lesion groups), not seed count; section 2's reasoning about seeds alone was incomplete.
+- **V1 outcome not anticipated in this plan:** DullRazor beats Cv2 on pasted real strands, including on lesion pixels the hair did not cover. Reported as measured, with the caveat that composite targets are the cleanest photos.
+- Not done: the human ratings (needs a person), any re-training. Gradient clipping stays a listed deviation.
+

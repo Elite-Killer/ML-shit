@@ -37,7 +37,7 @@ from dm_ahr_vit.xai.batched import (  # noqa: E402
     random_map_baselines,
 )
 from dm_ahr_vit.xai.geometry import (  # noqa: E402
-    ARM_STORED_SIZE,
+    ARM_STORED_SIZES,
     FRAME_VERSION,
     mask_to_model_frame,
     shift_zero_fill,
@@ -72,7 +72,7 @@ def explain(model, x, device, size):
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--arm", required=True, choices=sorted(ARM_STORED_SIZE))
+    ap.add_argument("--arm", required=True, choices=sorted(ARM_STORED_SIZES))
     ap.add_argument("--seed", type=int, required=True)
     ap.add_argument("--split", default="test", choices=["test", "val"])
     ap.add_argument("--commit", default="unknown")
@@ -99,17 +99,21 @@ def main() -> int:
     ds = ArmDataset(args.arm, args.split, splits, isic_images_dir(), data_root() / "processed",
                     build_transforms(cfg, train=False), image_ids=ids)
 
-    # The geometry registry must match what is on disk for this arm.
-    stored = ARM_STORED_SIZE[args.arm]
-    for i in range(0, len(ds), max(1, len(ds) // 25)):
-        with Image.open(ds._path(ds.records.iloc[i]["image_id"])) as fh:
-            if fh.size != stored:
-                raise RuntimeError(f"{args.arm}: stored size {fh.size} != registry {stored}")
+    # Stored size is per image (hair-absent images pass through at full size in the 128 px arms);
+    # read it from the file and check it against the sizes this arm is allowed to have.
+    stored_of, allowed = {}, ARM_STORED_SIZES[args.arm]
+    for image_id in ids:
+        with Image.open(ds._path(image_id)) as fh:
+            stored_of[image_id] = fh.size
+        if stored_of[image_id] not in allowed:
+            raise RuntimeError(f"{args.arm}/{image_id}: stored size {stored_of[image_id]} "
+                               f"not in {sorted(allowed)}")
+    share_squashed = float(np.mean([s == (128, 128) for s in stored_of.values()]))
 
     masks = {}
     for image_id in ids:
         with Image.open(resolve(mask_path[image_id])) as fh:
-            masks[image_id] = mask_to_model_frame(fh, stored, size)
+            masks[image_id] = mask_to_model_frame(fh, stored_of[image_id], size)
 
     gauss = gaussian_chance_map(size)
     rows = []
@@ -157,7 +161,7 @@ def main() -> int:
 
     prov = {
         "arm": args.arm, "seed": args.seed, "split": args.split, "n": int(len(df)),
-        "frame": FRAME_VERSION, "stored_size": list(stored), "top_fraction": fraction,
+        "frame": FRAME_VERSION, "share_stored_128": share_squashed, "top_fraction": fraction,
         "random_draws": DRAWS, "max_shift_frac": MAX_SHIFT_FRAC,
         "accuracy_on_split": float(df["correct"].mean()),
         "mean_mask_area": float(df["mask_area"].mean()),

@@ -15,7 +15,7 @@ from dm_ahr_vit.xai.batched import (
     metric_definitions,
     random_map_baselines,
 )
-from dm_ahr_vit.xai.geometry import ARM_STORED_SIZE, mask_to_model_frame, shift_zero_fill
+from dm_ahr_vit.xai.geometry import ARM_STORED_SIZES, mask_to_model_frame, shift_zero_fill
 from dm_ahr_vit.xai.vit_xai import (
     GradCAM,
     attention_rollout,
@@ -49,21 +49,24 @@ def _iou(a, b):
     return float((a & b).sum() / max((a | b).sum(), 1))
 
 
-@pytest.mark.parametrize("arm", sorted(ARM_STORED_SIZE))
-def test_mask_stays_aligned_with_the_image_the_model_sees(arm):
+STORED_CASES = sorted({(a, wh) for a, s in ARM_STORED_SIZES.items() for wh in s})
+
+
+@pytest.mark.parametrize("arm,stored_wh", STORED_CASES)
+def test_mask_stays_aligned_with_the_image_the_model_sees(arm, stored_wh):
     full = _box_image(FULL_WH)
-    stored = full.resize(ARM_STORED_SIZE[arm], Image.Resampling.BICUBIC)   # how the arm stores it
-    mask = mask_to_model_frame(full.convert("L"), ARM_STORED_SIZE[arm], 224)
+    stored = full.resize(stored_wh, Image.Resampling.BICUBIC)      # how the arm stores this image
+    mask = mask_to_model_frame(full.convert("L"), stored_wh, 224)
     seen = _model_input_bright(stored)
-    assert _iou(mask, seen) > 0.9, (arm, _iou(mask, seen))
+    assert _iou(mask, seen) > 0.9, (arm, stored_wh, _iou(mask, seen))
 
 
-def test_mask_fraction_in_model_frame_differs_by_arm():
-    fr = {a: float(mask_to_model_frame(_box_image(FULL_WH).convert("L"), wh, 224).mean())
-          for a, wh in ARM_STORED_SIZE.items()}
-    assert fr["A"] == pytest.approx(fr["B"]) and fr["Astar"] == pytest.approx(fr["Cv2"])
+def test_mask_fraction_in_model_frame_differs_by_stored_size():
+    fr = {wh: float(mask_to_model_frame(_box_image(FULL_WH).convert("L"), wh, 224).mean())
+          for wh in {w for s in ARM_STORED_SIZES.values() for w in s}}
     # 600x450 loses the sides to the crop (box covers ~0.31 of the frame); 128x128 loses less (~0.23)
-    assert fr["A"] == pytest.approx(0.311, abs=0.01) and fr["Cv2"] == pytest.approx(0.233, abs=0.01)
+    assert fr[(600, 450)] == pytest.approx(0.311, abs=0.01)
+    assert fr[(128, 128)] == pytest.approx(0.233, abs=0.01)
 
 
 def test_legacy_squash_is_misregistered_for_full_size_images(tmp_path):

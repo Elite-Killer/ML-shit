@@ -6,9 +6,11 @@ cropped frame, so a lesion mask has to be carried through the identical resize a
 it is compared with a map. The classifier's evaluation transform (``data.dataset``) and every
 explanation script call the functions below, so the two cannot drift apart.
 
-Stored image sizes differ by arm: the original and DullRazor arms keep the 600 x 450 photo; the
-diffusion-based arms and the 128 px control are stored as 128 x 128 (an aspect-ratio squash).
-Masks are stored at 600 x 450 and are squashed to the arm's stored size first.
+Stored image sizes differ by arm AND by image: the original and DullRazor arms keep the 600 x 450
+photo; in the A*, C, Creleased and Cv2 arms the hair-present images are stored at 128 x 128 (an
+aspect-ratio squash) while hair-absent images pass through unchanged at 600 x 450 (see
+`scripts/02_hair_pipeline.py`). The geometry therefore reads each image's stored size from the file.
+Masks are stored at 600 x 450 and are squashed to that size first.
 """
 
 from __future__ import annotations
@@ -20,9 +22,12 @@ from torchvision import transforms
 from torchvision.transforms import InterpolationMode
 
 EVAL_SCALE = 1.14
-ARM_STORED_SIZE: dict[str, tuple[int, int]] = {
-    "A": (600, 450), "B": (600, 450),
-    "Astar": (128, 128), "C": (128, 128), "Creleased": (128, 128), "Cv2": (128, 128),
+FULL_SIZE = (600, 450)
+SQUASHED_SIZE = (128, 128)
+ARM_STORED_SIZES: dict[str, frozenset[tuple[int, int]]] = {
+    "A": frozenset({FULL_SIZE}), "B": frozenset({FULL_SIZE}),
+    "Astar": frozenset({FULL_SIZE, SQUASHED_SIZE}), "C": frozenset({FULL_SIZE, SQUASHED_SIZE}),
+    "Creleased": frozenset({FULL_SIZE, SQUASHED_SIZE}), "Cv2": frozenset({FULL_SIZE, SQUASHED_SIZE}),
 }
 FRAME_VERSION = "model_frame_v2"
 

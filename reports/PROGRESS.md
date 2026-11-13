@@ -58,13 +58,15 @@ Test macro-F1, mean ± SD over 3 seeds, 1,502 test images:
   DullRazor-style removal *hurts* classification on this cohort.
 - **A vs A***: +0.018, CI [-0.008, 0.045], p_holm = 0.167. The 128 px
   resolution change alone is not a significant effect.
-- **A vs C**: +0.324, CI [0.283, 0.366], p_holm < 0.0001. Arm C is far worse,
-  consistent with the half-budget sampling producing over-smoothed images.
+- **A vs C**: +0.324, CI [0.283, 0.366], p_holm < 0.0001. Arm C is far worse
+  because its images come from a defective training run (inverted noise-level
+  signal), not because DM-AHR cannot help.
 - **B vs C**: +0.272, CI [0.225, 0.320], p_holm < 0.0001.
 - **Image quality** (186 held-out pairs): B improves PSNR 22.13 -> 35.73 and
   SSIM 0.520 -> 0.918 versus the hairy input. Arm C scores 16.31 / 0.130,
-  *worse than doing nothing*, because the 20,000-iteration checkpoint is
-  undertrained relative to upstream's 660,000.
+  *worse than doing nothing*, because the 20,000-iteration checkpoint was trained
+  with an inverted noise-level signal (diagnosis of "undertrained" retracted;
+  see `reports/oneshot_diagnostic_report.md`).
 - **Explainability** (X1, 1,502 images): Grad-CAM lesion-overlap@20% 0.38,
   attention rollout 0.55-0.60, against a uniform chance baseline of 0.20 and a
   centred-Gaussian baseline of 0.64. Rollout does not beat the Gaussian
@@ -181,9 +183,10 @@ new Modal account rather than from the old one.
 
 ## Next step
 
-Nothing outstanding on the research question. Remaining known gaps: Arm C needs
-the full training budget to be a fair test of published DM-AHR (D1, D12), and
-V7's PDF rendering evidence needs a machine with LibreOffice.
+Nothing outstanding on the research question. Remaining known gap: our own
+Arm C is a failed replication (inverted noise-level signal fixed; the fixed run
+still fails sampling at the budgets tried), and V7's PDF rendering evidence needs
+a machine with LibreOffice.
 
 ## 2026-11-12 - Delivery package complete
 
@@ -207,9 +210,11 @@ V7's PDF rendering evidence needs a machine with LibreOffice.
 
 ## Delivery caveats to state to the client
 
-1. Arm C (our diffusion run) is under-resourced and is not a fair test of
-   published DM-AHR. The released-checkpoint arm (Creleased) is the fair test
-   and it does not beat classical removal or original images.
+1. Arm C (our diffusion run) is a failed replication: its training script gave
+   the network an inverted noise-level signal. The released-checkpoint arm
+   (Creleased) is the only diffusion arm with usable hair removal; it does not
+   beat classical removal or original images, its sampling routine is not
+   reproducible from this repository, and its training data is unverified.
 2. DERMAHAIR was unavailable, so image quality uses 186 synthetic pairs and the
    hair detector is unvalidated on real hair.
 3. Licensing is unresolved: HAM10000 is CC BY-NC 4.0 and the DM-AHR repository
@@ -261,3 +266,7 @@ real defect, and the answer is now **no**.
 **Consequence: training to 660,000 on the old trainer would have reproduced the
 defect. Any retraining must start from scratch with the fixed trainer.**
 
+
+## 2026-11-13 - Arm C retrain stopped; reports corrected
+
+See decision log D30. The fixed trainer was tested on validation pairs only; the 100,000-iteration continuation was stopped at 56,300. The retracted "undertrained" diagnosis was removed from the final report, Word reports, PDFs, code guide and README. Deliverable gates 8 of 8 and acceptance 14 of 14 pass on the Modal volume. The 186 test pairs were not touched.

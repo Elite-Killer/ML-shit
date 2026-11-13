@@ -96,3 +96,19 @@ number. Scoring the final checkpoint on 100 pairs adds about 10 GPU-minutes.
 Nothing here shows the continuation will pass. A pass would show the gap closes with
 training; it would not show which part of the gap was budget and which was something
 else, because the 20,000-iteration profile shows a deficit that is not uniform in t.
+
+## Outcome: stopped by the project owner at 56,300 of 100,000 iterations (14:58 UTC)
+
+The continuation was stopped on cost before reaching the final evaluation, so the pass, middle and fail rules above were **not applied**. No verdict is claimed for the 100,000-iteration endpoint.
+
+What was measured before stopping (validation pairs only, CPU, 12 pairs, one noise draw; `artifacts/diagnosis/profile_*.json`):
+
+| Snapshot | eps L1 at t=1500 | eps L1 at t=1900 |
+|---|---:|---:|
+| 20k | 0.0098 | 0.0098 |
+| 40k | 0.0098 | 0.0095 |
+| 50k | 0.0086 | 0.0101 |
+| average of 30k to 50k | 0.0089 | 0.0090 |
+| released | 0.0048 | 0.0038 |
+
+The 50,000-iteration early-stop rule (stop if t=1500 error is at or above 0.0095) did not fire. Sampling quality was not measured at any snapshot after 20,000 iterations. Training time spent on the continuation: about 3,590 s on one A100-80GB. Snapshots up to 55,000 iterations remain on the volume (`artifacts/checkpoints/dmahr/`); the 20,000-iteration originals are in `dmahr_fixed20k/`.

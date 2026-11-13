@@ -98,6 +98,52 @@ tight spread near 28 dB. Prediction if not: spread like the TF32 runs, in which 
 CPU draw was a tail event and the continuation in
 `reports/prereg_continuation_arm_c.md` stays justified.
 
+## Results (14:50 UTC, while the 20k to 100k continuation is still running)
+
+All CPU, validation pairs only, scripts committed before running (`31_local_diagnosis.py`
+at 554d4c5, `32_gradnorm.py` at 66d10d4). One-step quantities, 12 pairs, one noise draw.
+
+**Learning curve of the fixed model, eps L1 error (lower is better); released for reference.**
+
+| t | fixed 20k | fixed 40k | released | Reading |
+|---:|---:|---:|---:|---|
+| 50 | 0.1097 | 0.0851 | 0.2008 | improving, already better than released |
+| 200 | 0.0368 | 0.0268 | 0.0799 | improving |
+| 500 | 0.0183 | 0.0152 | 0.0384 | improving |
+| 1000 | 0.0102 | 0.0099 | 0.0118 | flat, at released level |
+| 1500 | 0.0098 | **0.0098** | 0.0048 | **flat over 20k iterations; 2x released** |
+| 1900 | 0.0098 | **0.0095** | 0.0038 | **flat; 2.5x released** |
+
+Condition effect at t=1500 stays 1.23 (released 3.43); at t=1900 0.94 (released 1.35).
+Artifacts: `artifacts/diagnosis/profile_20k.json`, `profile_40k.json` (40k snapshot sha256
+prefix 109027bf). Observed.
+
+At t=1500 the sampler's x0 estimate multiplies eps error by about 17 (and about 93 at
+t=1900), so an eps error of 0.0098 costs about 20 dB of one-step PSNR where the released
+model's 0.0048 costs 25.6 dB. Inferred from the schedule, consistent with the table.
+
+**Prediction check.** Undertraining predicted that high-t error would fall across
+snapshots. Over 20k to 40k it did not (0.0098 to 0.0098); low-t error did fall. The
+pre-registered rule at the 50k snapshot (stop if t=1500 error is still at or above 0.0095)
+is on track to fire. Verdict on H8 so far: **not supported at this budget**; not rejected
+for a larger budget.
+
+**H5 (EMA): cleared.** Upstream's `ema_scheduler` is marked "not used now" in every
+vendored config. Observed in `third_party/dmahr/config/*.json`.
+
+**H6 (optimiser), gradient norms** (`artifacts/diagnosis/gradnorm.json`, train mode, 2
+draws per level, 4 levels, CPU; one draw non-finite from the CPU NaN issue in D29):
+
+| Model | Gradient norm range | Draws above the clip of 1.0 |
+|---|---|---:|
+| fixed 20k | 0.72 to 1.88 | 62.5% |
+| released (725k) | 0.18 to 0.40 | 0% |
+
+Our trainer clips at 1.0 and upstream does not, and the clip engages on most draws of our
+model. The two models are at different training stages, so the norm gap alone does not
+show that clipping slows learning. Observed (n=8 per model); the effect of clipping is
+**Unknown**. This makes clipping the next single change in the continuation plan.
+
 ## Rules in force
 
 1. Every script is committed before it runs; artifacts record git commit, config hash, checkpoint

@@ -1,0 +1,60 @@
+# Arm C root-cause hypotheses (written before the local diagnostics run)
+
+Status of this file: predictions below were committed **before** `scripts/31_local_diagnosis.py`
+was executed. Verdicts are appended in a later commit under "Results", never edited in place.
+Only validation pairs are used. The 186 test pairs are not read.
+
+## What is already observed (inputs to the predictions)
+
+| Fact | Source | Tag |
+|---|---|---|
+| Released checkpoint, 2,000 steps, 100 val pairs: 26.80 dB / SSIM 0.684 (hairy floor 22.11) | `reports/arm_c_diagnosis.md` | Observed |
+| Old Arm C (inverted noise-level encoding), same set: 14.99 dB / SSIM 0.079, 15x reference high-frequency energy | same | Observed |
+| Fixed-encoding Arm C, 20k its, **8** val pairs, 2,000 steps: 14.11 dB / SSIM 0.594 (hairy floor 20.08 / 0.712) | `gate3_smoke_eval.json` | Observed (n=8) |
+| Released on the same 8 pairs: 26.64 dB / SSIM 0.815 | `control_released_eval.json` | Observed (n=8) |
+| Upstream: Adam 1e-4, batch 4, L1 mean, **no gradient clipping, no EMA**, 725,000 its at epoch 1083 (about 669 it/epoch, so about 2,700 pairs) | `third_party/dmahr/config/*.json`, `model/model.py` | Observed |
+| Ours: Adam 1e-4, batch 4, L1 mean, **grad clip 1.0**, no EMA, 20,000 its, 654 train pairs | `src/dm_ahr_vit/diffusion/train.py` | Observed |
+
+Observation O1: fixing the encoding moved SSIM from 0.08 to 0.59 but PSNR stayed near 14 dB.
+That is the signature of right-looking structure with a large global intensity error, not of noise.
+It is a prediction target below, not yet a finding.
+
+## Register
+
+| ID | Hypothesis | Prediction if true | Test | Verdict |
+|---|---|---|---|---|
+| H1 | Encoding mismatch (t/T vs sqrt alpha-bar) explains the full sampling gap | Fixed model reaches released-level sampling PSNR | already run: Gate 3 | pending write-up |
+| H2 | Conditioning wiring (order, channels, zeroed/dropped) | Zeroing or shuffling the condition changes eps error by the same factor at every t | condition ablation, `profile` | pending |
+| H3 | Data pipeline (misaligned/swapped pair, range, split) | Hair-mask region carries the pair difference; range [-1,1]; no train/val group overlap | data checks in `tests/test_trainer_sampler_contract.py` | pending |
+| H4 | Loss/target parametrisation | Our loss differs from upstream `p_losses` at fixed seed | differential test | pending |
+| H5 | EMA | Upstream uses EMA and we do not | read upstream config: `ema_scheduler` is marked "not used now" | pending |
+| H6 | Optimiser: clipping, samples seen, data size | Gap concentrates where the learning signal is weakest (high noise) | `profile` eps-error vs t | pending |
+| H7 | Sampler algebra / schedule indexing | Oracle-epsilon sampler fails to reconstruct x0 | oracle test | pending |
+| H8 | Undertraining (measured remainder only) | Released beats ours by a margin that grows with t | `profile` | pending |
+| H9 | Evaluation harness | Metric function disagrees with known corruptions | metric tests | pending |
+
+## Specific predictions
+
+- **P-H7**: with the true epsilon fed to the posterior step, the final sample equals x0 to within 1e-3.
+- **P-H4**: our per-step loss equals upstream `p_losses` / numel at identical seeds to float precision.
+- **P-H2/H8 (profile)**: released shows a condition effect (eps error with condition zeroed over eps
+  error with condition kept) of about 3x or more at t = 1000 and 1500. If the new model's ratio is
+  near 1 at t = 1500 only, the cause is a weak learning signal at high noise, not wiring, since wiring
+  does not depend on t.
+- **P-colour (sampling, 1 pair)**: if the sampling failure is a global tone error, the new model's
+  output scores at least 5 dB higher after per-channel mean matching, and its low-frequency error
+  dominates its high-frequency error. If it is texture noise, mean matching changes PSNR by under
+  1 dB and high-frequency error dominates.
+- Falsifier for "undertraining": the new model's eps error at high t is already within 10 percent
+  of the released model's. Then the gap is not in the one-step quantity this trainer optimises and
+  the cause lies elsewhere (sampler interaction, data domain).
+
+## Rules in force
+
+1. Every script is committed before it runs; artifacts record git commit, config hash, checkpoint
+   hash and manifest hash.
+2. One change at a time. A fix is confirmed only if the failing metric recovers, a regression test
+   passes, and reverting the fix restores the failure.
+3. Conflicting evidence is reproduced or explained, never dropped.
+4. Attribution is quantified: dB closed out of the dB gap; the rest is reported as unexplained.
+5. One-step floors are the noisy input's own PSNR, not the hairy-input PSNR.

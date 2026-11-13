@@ -20,7 +20,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from dm_ahr_vit.config import load_config  # noqa: E402
+from dm_ahr_vit.config import load_hair_screen_config  # noqa: E402
 from dm_ahr_vit.data.hair_composite import HAIR_MIN_COVERAGE  # noqa: E402
 from dm_ahr_vit.hair.harvest import thin_hair_mask  # noqa: E402
 from dm_ahr_vit.paths import data_root, isic_images_dir, manifest_dir  # noqa: E402
@@ -51,8 +51,8 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=0, help="process only this many (smoke test)")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
-    cfg = json.loads((Path(__file__).resolve().parents[1] / "artifacts" / "logs"
-                      / "hair_frozen_config.json").read_text())["screen"]
+    cfg = load_hair_screen_config()
+    log.info("hair screen config hash %s", cfg["config_hash"])
     scr = pd.read_csv(manifest_dir() / "hair_screening.csv")
     scr = scr[scr["split"].isin(["train", "val"]) & (scr["hair_coverage"] >= HAIR_MIN_COVERAGE)]
     assert not (scr["split"] == "test").any()

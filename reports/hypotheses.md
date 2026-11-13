@@ -144,6 +144,31 @@ model. The two models are at different training stages, so the norm gap alone do
 show that clipping slows learning. Observed (n=8 per model); the effect of clipping is
 **Unknown**. This makes clipping the next single change in the continuation plan.
 
+### Update (15:05 UTC): 50k snapshot and snapshot averaging
+
+Same procedure and 12 pairs as above (`profile_50k.json`, `profile_avg_30k_50k.json`;
+`scripts/35_average_snapshots.py` and the `--only` filter committed at 7f76b08 before use).
+eps L1 error by t (50 / 200 / 500 / 1000 / 1500 / 1900):
+
+| Model | 50 | 200 | 500 | 1000 | 1500 | 1900 |
+|---|---:|---:|---:|---:|---:|---:|
+| fixed 20k | 0.1097 | 0.0368 | 0.0183 | 0.0102 | 0.0098 | 0.0098 |
+| fixed 40k | 0.0851 | 0.0268 | 0.0152 | 0.0099 | 0.0098 | 0.0095 |
+| fixed 50k | 0.0981 | 0.0278 | 0.0134 | 0.0090 | **0.0086** | 0.0101 |
+| average of 30k, 35k, 40k, 45k, 50k | 0.0912 | 0.0255 | 0.0126 | 0.0090 | 0.0089 | 0.0090 |
+| released | 0.2008 | 0.0799 | 0.0384 | 0.0118 | 0.0048 | 0.0038 |
+
+- **Early-stop rule (t=1500 at or above 0.0095 at the 50k snapshot): did not fire**, 0.0086.
+  The job continues. Observed. One noise draw on 12 pairs, so a 12% change between
+  snapshots is within what measurement noise could produce; the trend is not established.
+- **Snapshot averaging** lowers t=1900 from 0.0095 to 0.0090 and leaves t=1500 near 0.0089.
+  The floor stays at about 0.009, about twice the released model at t=1500 and 2.4 times
+  at t=1900. Weight jitter is therefore at most a minor part of the floor. Observed.
+- The floor is nearly the same at t=1000, 1500 and 1900 (0.009 to 0.010) while the
+  released model's error falls with t. Inferred: at high noise the network must reproduce
+  the input noise almost exactly (eps close to x_t), and that precision, not the
+  noise-level signal, is what is missing.
+
 ## Rules in force
 
 1. Every script is committed before it runs; artifacts record git commit, config hash, checkpoint

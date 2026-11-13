@@ -473,9 +473,12 @@ def trainer_gates(gate: str = "1"):
 
 @app.function(image=image, gpu="A100-80GB", timeout=7200, volumes={"/vol": vol})
 def gate3_eval(pairs: int = 182, checkpoint: str = "", tag: str = "gate3",
-               precision: str = "bf16", replicate_first: int = 0):
+               precision: str = "bf16", replicate_first: int = 0,
+               no_tf32: bool = False):
     os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
     args = ["--pairs", str(pairs), "--tag", tag, "--precision", precision]
+    if no_tf32:
+        args += ["--no-tf32"]
     if replicate_first:
         args += ["--replicate-first", str(replicate_first)]
     if checkpoint:

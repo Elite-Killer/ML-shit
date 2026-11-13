@@ -71,6 +71,33 @@ model tolerates it: 26.64 dB in bf16, n=8).
 - Anything in between is reported as it is and read as partial.
 - Rule: if fp32 passes, the continuation is **not** launched.
 
+### H10 results so far (13:55 UTC), and a correction to how H10 was tested
+
+All GPU runs below: A100, fixed-20k `best_gen.pth` (sha256 prefix 4269a678, identical to the
+local CPU copy), seed 42, 2,000 steps, validation pairs only.
+
+| Run | Result | Tag |
+|---|---|---|
+| 24 pairs, "fp32" vs bf16 | 14.96 dB vs 15.06 dB mean PSNR; floor 21.30 | Observed |
+| pair 0 alone, "fp32" | 9.64 dB (floor 19.54) | Observed |
+| pair 0, 16 noise draws, "fp32": fixed-20k | 6.4 to 20.0 dB, mean 11.84 | Observed |
+| pair 0, 16 noise draws, "fp32": released | 25.2 to 27.4 dB, mean 26.26 | Observed |
+| pair 0, CPU true fp32, one draw: fixed-20k | 28.17 dB, SSIM 0.919 | Observed (n=1) |
+
+**Correction.** The two GPU "fp32" runs were not true fp32. PyTorch enables TF32
+convolutions on Ampere by default, so "fp32" and bf16 were both reduced-precision
+paths, and agreeing with each other says nothing about true fp32. The statement above
+that H10 is "falsified" is withdrawn; H10 is **untested for true fp32 on the GPU**.
+The only true-fp32 run is the CPU one, a single draw.
+
+What the data do show: sampling is unstable for the fixed model (6 to 20 dB across
+draws of the same pair) and tight for the released model, and the one CPU draw is
+outside the GPU range. Next test, committed before running: `--no-tf32` (true fp32
+on GPU), 16 draws of pair 0. Prediction if numerical precision drives the instability:
+tight spread near 28 dB. Prediction if not: spread like the TF32 runs, in which case the
+CPU draw was a tail event and the continuation in
+`reports/prereg_continuation_arm_c.md` stays justified.
+
 ## Rules in force
 
 1. Every script is committed before it runs; artifacts record git commit, config hash, checkpoint

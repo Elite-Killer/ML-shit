@@ -48,7 +48,14 @@ def main() -> int:
     ap.add_argument("--replicate-first", type=int, default=0,
                     help="sample the first pair this many times with different noise "
                          "instead of scoring --pairs distinct pairs")
+    ap.add_argument("--no-tf32", action="store_true",
+                    help="true fp32: disable TF32 convolutions and matmuls (PyTorch "
+                         "enables TF32 convs on Ampere by default)")
     args = ap.parse_args()
+    if args.no_tf32:
+        torch.backends.cudnn.allow_tf32 = False
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.set_float32_matmul_precision("highest")
 
     cfg = load_config("configs/dmahr.json")
     win = int(load_config("configs/sampling.json").get("ssim_win_size", 7))
@@ -74,7 +81,8 @@ def main() -> int:
 
     out: dict = {"checkpoint": str(ckpt), "pairs": int(len(val)),
                  "sample_steps": SAMPLE_STEPS, "pass_margin_db": PASS_MARGIN,
-                 "precision": args.precision}
+                 "precision": args.precision,
+                 "cudnn_tf32": bool(torch.backends.cudnn.allow_tf32)}
 
     net = load_model(cfg, ckpt, device=device)
 
